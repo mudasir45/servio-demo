@@ -27,7 +27,7 @@ export default function ToastHost() {
   if (!toasts.length) return null;
   return (
     <div className="toast-wrap" aria-live="polite">
-      {toasts.map((x) => (<div key={x.id} className="toast">🔔 {x.text}</div>))}
+      {toasts.map((x) => (<div key={x.id} className="toast">{x.text}</div>))}
     </div>
   );
 }

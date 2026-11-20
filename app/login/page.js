@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useServio, transact, setSession, getSession, resetDemoData, uid, notify, logActivity } from '../../lib/store';
+import { TINTS } from '../../lib/seed';
 
 const DEMO = [
   { name: 'Ayesha', role: 'Seeker', phone: '0300-1111111', note: 'Seeker — free' },
@@ -85,20 +86,30 @@ export default function LoginPage() {
   const toggleList = (key, val) => setOb((o) => ({ ...o, [key]: o[key].includes(val) ? o[key].filter((x) => x !== val) : [...o[key], val] }));
 
   return (
-    <main className="page">
-      <h1 className="center" style={{ fontSize: 40, marginBottom: 2 }}>Servio</h1>
-      <p className="center muted" style={{ marginTop: 0 }}>Local karigar, by voice.</p>
+    <>
+      <header className="topbar">
+        <div className="topbar-in">
+          <div className="logo"><div className="logo-mark">S</div><b>Servio</b></div>
+        </div>
+      </header>
+      <main className="page">
+      <div className="voice-hero">
+        <h1>Bol kar kaam <em>karwao</em></h1>
+        <p>Bas bolo — Servio samajh jayega</p>
+        <button className="bigmic" aria-label="Bol kar kaam post karein" onClick={() => document.getElementById('auth-card')?.scrollIntoView({ behavior: 'smooth' })}>🎙️</button>
+        <div style={{ fontWeight: 800 }}>Mic dabao, bolo</div>
+      </div>
 
       {step === 'form' && (
         <>
-          <div className="tabs" role="tablist">
-            <button className={`tab ${tab === 'login' ? 'sel' : ''}`} onClick={() => setTab('login')}>Log in</button>
-            <button className={`tab ${tab === 'seeker' ? 'sel' : ''}`} onClick={() => setTab('seeker')}>Seeker signup</button>
-            <button className={`tab ${tab === 'provider' ? 'sel' : ''}`} onClick={() => setTab('provider')}>Provider signup</button>
+          <div className="pill-row" role="tablist" style={{ marginTop: 16 }}>
+            <button className={`pill ${tab === 'login' ? 'active' : ''}`} onClick={() => setTab('login')}>Log in</button>
+            <button className={`pill ${tab === 'seeker' ? 'active' : ''}`} onClick={() => setTab('seeker')}>Seeker signup</button>
+            <button className={`pill ${tab === 'provider' ? 'active' : ''}`} onClick={() => setTab('provider')}>Provider signup</button>
           </div>
 
           {tab === 'login' && (
-            <div className="card">
+            <div className="card" id="auth-card">
               <label>Phone number</label>
               <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0300-0000000" inputMode="tel" />
               {error && <div className="warn">{error}</div>}
@@ -109,7 +120,7 @@ export default function LoginPage() {
           )}
 
           {tab !== 'login' && (
-            <div className="card">
+            <div className="card" id="auth-card">
               <label>Your name</label>
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Muhammad Ali" />
               <label>Phone number</label>
@@ -121,12 +132,13 @@ export default function LoginPage() {
             </div>
           )}
 
-          <h3>Demo accounts — tap one</h3>
-          <div className="demo-grid">
+          <div className="section-head"><h2>Demo accounts — tap one</h2></div>
+          <div className="demo-grid" style={{ marginTop: 0 }}>
             {DEMO.map((d) => (
               <button key={d.phone} className="demo-card" onClick={() => { setTab('login'); startLogin(d.phone); }}>
+                <span className="icon">{d.role === 'Seeker' ? '🏠' : d.role === 'Admin' ? '🛡️' : '🧰'}</span>
                 <b>{d.name}</b><span className="chip">{d.role}</span>
-                <div className="small muted">{d.phone}<br />{d.note}</div>
+                <div className="small muted" style={{ marginTop: 6 }}><span dir="ltr">{d.phone}</span><br />{d.note}</div>
               </button>
             ))}
           </div>
@@ -137,12 +149,11 @@ export default function LoginPage() {
         <div className="card">
           <h3 style={{ marginTop: 0 }}>{step === 'pin' ? 'Admin PIN' : 'Enter code'}</h3>
           <p className="muted">{step === 'pin' ? 'Enter the admin PIN.' : `We sent a code to ${phone}. Demo code is 1234.`}</p>
-          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder={step === 'pin' ? '9999' : '1234'} inputMode="numeric" style={{ fontSize: 24, textAlign: 'center', letterSpacing: 6 }} />
-          {error && <div className="warn">{error}</div>}
+          <input className="otp-input" value={code} onChange={(e) => setCode(e.target.value)} placeholder={step === 'pin' ? '9999' : '1234'} inputMode="numeric" />
+          {error && <div className="error-box" style={{ display: 'block' }}>{error}</div>}
           <div style={{ height: 12 }} />
-          <button className="btn btn-brass" onClick={verifyCode}>Verify</button>
-          <div style={{ height: 8 }} />
-          <button className="btn btn-ghost" onClick={() => { setStep('form'); setCode(''); setError(''); }}>Back</button>
+          <button className="btn btn-amber" onClick={verifyCode}>✓ Verify</button>
+          <button className="skip-link" style={{ display: 'block', margin: '8px auto 0', background: 'none', border: 0, color: 'var(--muted)', fontWeight: 700, fontSize: 16, minHeight: 48 }} onClick={() => { setStep('form'); setCode(''); setError(''); }}>← Back</button>
         </div>
       )}
 
@@ -151,11 +162,11 @@ export default function LoginPage() {
           <h3 style={{ marginTop: 0 }}>Your work profile</h3>
           <label>What work do you do? (tap all)</label>
           <div className="tile-grid">
-            {db.categories.filter((c) => c.active).map((c) => (
-              <button key={c.id} className={`tile ${ob.categories.includes(c.id) ? 'sel' : ''}`} onClick={() => toggleList('categories', c.id)}>
-                <span className="ic">{c.icon}</span>{c.en}
+            {db.categories.map((c, i) => c.active ? (
+              <button key={c.id} className={`tile ${ob.categories.includes(c.id) ? 'sel' : ''}`} style={{ background: TINTS[i % TINTS.length] }} onClick={() => toggleList('categories', c.id)}>
+                <span className="ic">{c.icon}</span><b>{c.en}</b>
               </button>
-            ))}
+            ) : null)}
           </div>
           <label>Where do you work? (tap all)</label>
           {db.areas.filter((a) => a.active).map((a) => (
@@ -165,16 +176,21 @@ export default function LoginPage() {
           <input value={ob.experience} onChange={(e) => setOb({ ...ob, experience: e.target.value })} inputMode="numeric" placeholder="e.g. 5" />
           <label>Usual charge (PKR)</label>
           <input value={ob.price} onChange={(e) => setOb({ ...ob, price: e.target.value })} inputMode="numeric" placeholder="e.g. 1500" />
-          <label className="check-row"><input type="checkbox" checked={ob.availability} onChange={(e) => setOb({ ...ob, availability: e.target.checked })} /> I am available for work now</label>
+          <div className="field-row">
+            <span className="fi">🟢</span>
+            <div className="fv"><b>Available</b><small>I am available for work now</small></div>
+            <label className="switch"><input type="checkbox" checked={ob.availability} onChange={(e) => setOb({ ...ob, availability: e.target.checked })} /><span className="track"></span></label>
+          </div>
           {error && <div className="warn">{error}</div>}
           <div style={{ height: 10 }} />
-          <button className="btn btn-brass" onClick={finishProviderSignup}>Go live — get 40 free coins</button>
+          <button className="btn btn-amber" onClick={finishProviderSignup}>Go live — get 40 free coins</button>
         </div>
       )}
 
       <p className="center small" style={{ marginTop: 28 }}>
         <a href="#" onClick={(e) => { e.preventDefault(); if (confirm('Reset all demo data back to the start?')) { resetDemoData(); window.location.reload(); } }}>Reset demo data</a>
       </p>
-    </main>
+      </main>
+    </>
   );
 }

@@ -86,43 +86,36 @@ export default function ProviderPage() {
     <div dir={lang === 'ur' ? 'rtl' : 'ltr'}>
       <AppHeader role="provider" />
       <main className="page">
-        <h2 style={{ marginBottom: 0 }}>{session.name}</h2>
+        <h1 style={{ marginBottom: 0 }}>{session.name}</h1>
         <p className="muted" style={{ marginTop: 2 }}>{(profile.categories || []).map((c) => catName(db, c, lang)).join(', ')} · ⭐ {profile.ratingAvg || 'New'} ({profile.ratingCount || 0}) · <b style={{ color: 'var(--brass-dark)' }}>🪙 {wallet.balance} {t(lang, 'coins')} = PKR {wallet.balance * COIN_PKR}</b></p>
-        <div className="tabs">
-          <button className={`tab ${tab === 'jobs' ? 'sel' : ''}`} onClick={() => setTab('jobs')}>{t(lang, 'jobs')} ({feed.length})</button>
-          <button className={`tab ${tab === 'leads' ? 'sel' : ''}`} onClick={() => setTab('leads')}>{t(lang, 'myBids')} ({myLeads.length})</button>
-          <button className={`tab ${tab === 'wallet' ? 'sel' : ''}`} onClick={() => setTab('wallet')}>{t(lang, 'wallet')}</button>
-          <button className={`tab ${tab === 'profile' ? 'sel' : ''}`} onClick={() => setTab('profile')}>{t(lang, 'profile')}</button>
-          <button className={`tab ${tab === 'alerts' ? 'sel' : ''}`} onClick={() => { setTab('alerts'); markAllRead(); }}>{t(lang, 'alerts')}{unread ? ` (${unread})` : ''}</button>
-        </div>
         {msg && <div className="ok">{msg}</div>}
 
         {tab === 'jobs' && (
           <>
-            {feed.length === 0 && <div className="card center"><div style={{ fontSize: 34 }}>🔍</div><p className="muted">No new jobs in your categories right now.</p></div>}
+            {feed.length === 0 && <div className="card empty"><div className="ei">🔍</div><p className="muted">No new jobs in your categories right now.</p></div>}
             {feed.map((j) => {
               const f = bidForms[j.id] || { priceType: 'fixed', price: '', priceTo: '', visitCharge: '', message: '' };
               const existing = myBids.find((b) => b.jobId === j.id && b.status === 'active');
               return (
-                <div key={j.id} className="card">
+                <div key={j.id} className="job">
                   <b>{catName(db, j.categoryId, lang)}</b> <span className="chip">{j.area}</span> <span className="chip">{j.urgency}</span>
                   <p style={{ margin: '8px 0' }}>{j.description}</p>
                   <p className="small muted">🎧 Seeker voice note would play here in production. Posted by {userName(db, j.seekerId)}.</p>
                   {existing && <span className="chip chip-green">Bid sent — you can edit it below</span>}
                   <label>Price type</label>
-                  <div className="tabs" style={{ paddingTop: 0 }}>
-                    {[['fixed', 'Fixed price'], ['range', 'Price range'], ['visit', 'Visit first']].map(([v, l]) => (
-                      <button key={v} className={`tab ${f.priceType === v ? 'sel' : ''}`} onClick={() => setBid(j.id, { priceType: v })}>{l}</button>
+                  <div className="type-grid">
+                    {[['fixed', '🎯', 'Fixed price', 'Ek hi rate'], ['range', '↔️', 'Price range', 'Kam se zyada tak'], ['visit', '👀', 'Visit first', 'Pehle dekh kar rate']].map(([v, ic, l, s]) => (
+                      <button key={v} className={`type-opt ${f.priceType === v ? 'sel' : ''}`} onClick={() => setBid(j.id, { priceType: v })}><span className="ti">{ic}</span><span><b>{l}</b><small>{s}</small></span></button>
                     ))}
                   </div>
-                  {f.priceType !== 'visit' && (<><label>{f.priceType === 'range' ? 'Price from (PKR)' : 'Price (PKR)'}</label><input inputMode="numeric" value={f.price} onChange={(e) => setBid(j.id, { price: e.target.value })} placeholder="1500" /></>)}
-                  {f.priceType === 'range' && (<><label>Price to (PKR)</label><input inputMode="numeric" value={f.priceTo} onChange={(e) => setBid(j.id, { priceTo: e.target.value })} placeholder="2000" /></>)}
-                  {f.priceType === 'visit' && (<><label>Visit charge (PKR)</label><input inputMode="numeric" value={f.visitCharge} onChange={(e) => setBid(j.id, { visitCharge: e.target.value })} placeholder="500" /></>)}
-                  <div className="tabs" style={{ padding: '6px 0 0' }}>{[500, 1000, 1500, 2000].map((v) => (<button key={v} className="tab" onClick={() => setBid(j.id, f.priceType === 'visit' ? { visitCharge: String(v) } : { price: String(v) })}>{v}</button>))}</div>
+                  {f.priceType !== 'visit' && (<><label>{f.priceType === 'range' ? 'Price from (PKR)' : 'Price (PKR)'}</label><input className="amount-input" inputMode="numeric" value={f.price} onChange={(e) => setBid(j.id, { price: e.target.value })} placeholder="1500" /></>)}
+                  {f.priceType === 'range' && (<><label>Price to (PKR)</label><input className="amount-input" inputMode="numeric" value={f.priceTo} onChange={(e) => setBid(j.id, { priceTo: e.target.value })} placeholder="2000" /></>)}
+                  {f.priceType === 'visit' && (<><label>Visit charge (PKR)</label><input className="amount-input" inputMode="numeric" value={f.visitCharge} onChange={(e) => setBid(j.id, { visitCharge: e.target.value })} placeholder="500" /></>)}
+                  <div className="pill-row" style={{ marginTop: 10, justifyContent: 'center' }}>{[500, 1000, 1500, 2000].map((v) => (<button key={v} className="pill" onClick={() => setBid(j.id, f.priceType === 'visit' ? { visitCharge: String(v) } : { price: String(v) })}>{v}</button>))}</div>
                   <label>Message (or 🎤 voice in production)</label>
                   <input value={f.message} onChange={(e) => setBid(j.id, { message: e.target.value })} placeholder="e.g. Main aaj aa sakta hoon" />
                   <div style={{ height: 12 }} />
-                  <button className="btn" onClick={() => sendBid(j)}>{existing ? 'Update Bid' : t(lang, 'sendBid')} · Free</button>
+                  <button className="btn btn-amber" onClick={() => sendBid(j)}>📩 {existing ? 'Update Bid' : t(lang, 'sendBid')} — FREE</button>
                 </div>
               );
             })}
@@ -160,47 +153,65 @@ export default function ProviderPage() {
 
         {tab === 'wallet' && (
           <>
-            <div className="card center">
-              <div className="muted">Your balance</div>
-              <div style={{ fontSize: 40, fontWeight: 800, fontFamily: 'Georgia,serif', color: 'var(--ink)' }}>🪙 {wallet.balance}</div>
-              <div className="muted">= PKR {wallet.balance * COIN_PKR} · One number shown costs 5 coins (PKR {5 * COIN_PKR})</div>
+            <div className="balance-card">
+              <div className="sub">Your balance</div>
+              <div className="num">🪙 {wallet.balance}</div>
+              <div className="sub">= PKR {wallet.balance * COIN_PKR} · 1 number = 5 coins (PKR {5 * COIN_PKR})</div>
             </div>
             {wallet.balance < 5 && <div className="warn">Your coins are low — you will show as “not available” to seekers. Top up below.</div>}
             <div className="card">
-              <h3 style={{ marginTop: 0 }}>Top up coins</h3>
-              <div className="tabs" style={{ paddingTop: 0 }}>{[20, 50, 100].map((c) => (<button key={c} className={`tab ${topup.coins === c ? 'sel' : ''}`} onClick={() => setTopup({ ...topup, coins: c })}>{c} coins · PKR {c * COIN_PKR}</button>))}</div>
-              <div className="tabs" style={{ paddingTop: 0 }}>{['JazzCash', 'Easypaisa'].map((m) => (<button key={m} className={`tab ${topup.method === m ? 'sel' : ''}`} onClick={() => setTopup({ ...topup, method: m })}>{m}</button>))}</div>
+              <h2 style={{ marginTop: 0 }}>Top up coins</h2>
+              <div className="pack-grid">{[20, 50, 100].map((c) => (<button key={c} className={`pack ${topup.coins === c ? 'sel' : ''}`} onClick={() => setTopup({ ...topup, coins: c })}><b>{c}{c === 50 ? ' ⭐' : ''}</b><span>PKR {c * COIN_PKR}</span></button>))}</div>
+              <div className="pill-row" style={{ marginTop: 12 }}>{['JazzCash', 'Easypaisa'].map((m) => (<button key={m} className={`pill ${topup.method === m ? 'active' : ''}`} onClick={() => setTopup({ ...topup, method: m })}>{m}</button>))}</div>
               <label>Transaction reference (from your {topup.method} receipt)</label>
               <input value={topup.ref} onChange={(e) => setTopup({ ...topup, ref: e.target.value })} placeholder="e.g. TXN-123456" />
               <div style={{ height: 12 }} />
-              <button className="btn btn-brass" onClick={requestTopup}>Send top-up request</button>
+              <button className="btn btn-amber" onClick={requestTopup}>Send top-up request</button>
               <h4>My requests</h4>
-              {db.topups.filter((x) => x.providerId === me).map((x) => (<p key={x.id} className="small">{x.coins} coins · {x.method} · {x.ref} — <b>{x.status}</b></p>))}
+              {db.topups.filter((x) => x.providerId === me).map((x) => (<p key={x.id} className="small">{x.coins} coins · {x.method} · {x.ref} — <span className="status-chip">{x.status}</span></p>))}
             </div>
-            <h3>History</h3>
-            {wallet.txns.length === 0 && <p className="muted">No transactions yet.</p>}
-            {wallet.txns.map((x) => (<div key={x.id} className="card" style={{ padding: '10px 16px' }}><b style={{ color: x.amount >= 0 ? 'var(--olive)' : 'var(--oxblood)' }}>{x.amount >= 0 ? '+' : ''}{x.amount} coins</b> — {x.note}<div className="small muted">{new Date(x.at).toLocaleString()}</div></div>))}
+            <div className="section-head"><h2>History</h2></div>
+            <div className="card" style={{ marginTop: 0 }}>
+              {wallet.txns.length === 0 && <p className="muted" style={{ margin: 0 }}>No transactions yet.</p>}
+              {wallet.txns.map((x) => (<div key={x.id} className="txn"><span>{x.note}<br /><span className="small muted">{new Date(x.at).toLocaleString()}</span></span><b className={x.amount >= 0 ? 'pos' : 'neg'}>{x.amount >= 0 ? '+' : ''}{x.amount}</b></div>))}
+            </div>
           </>
         )}
 
         {tab === 'profile' && (
           <div className="card">
-            <h3 style={{ marginTop: 0 }}>{session.name}</h3>
-            <p>{(profile.categories || []).map((c) => catName(db, c, lang)).join(', ')}</p>
-            <p className="muted">{(profile.areas || []).join(', ')} · {profile.experience} years experience · usual charge PKR {profile.price}</p>
-            {profile.bio && <p>{profile.bio}</p>}
-            <label className="check-row"><input type="checkbox" checked={!!profile.availability} onChange={toggleAvailability} /> {profile.availability ? t(lang, 'available') : t(lang, 'busy')}</label>
-            <p className="small muted">⭐ {profile.ratingAvg || 'New'} from {profile.ratingCount || 0} ratings</p>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 6 }}>
+              <div className="avatar">{session.name.charAt(0)}</div>
+              <h2>{session.name}</h2>
+            </div>
+            <div className="field-row"><span className="fi">🧰</span><div className="fv"><small>Kaam</small><b>{(profile.categories || []).map((c) => catName(db, c, lang)).join(' • ')}</b></div></div>
+            <div className="field-row"><span className="fi">📍</span><div className="fv"><small>Ilaka</small><b>{(profile.areas || []).join(' • ')}</b></div></div>
+            <div className="field-row"><span className="fi">⏱️</span><div className="fv"><small>Experience</small><b>{profile.experience} years</b></div></div>
+            <div className="field-row"><span className="fi">💰</span><div className="fv"><small>Charges</small><b>PKR {profile.price} se</b></div></div>
+            <div className="field-row"><span className="fi">⭐</span><div className="fv"><small>Rating</small><b>{profile.ratingAvg || 'New'} ({profile.ratingCount || 0} ratings)</b></div></div>
+            {profile.bio && <p style={{ marginBottom: 0 }}>{profile.bio}</p>}
+            <div className="field-row">
+              <span className="fi">🟢</span>
+              <div className="fv"><b>{t(lang, 'available')}</b><small>{profile.availability ? t(lang, 'available') : t(lang, 'busy')}</small></div>
+              <label className="switch"><input type="checkbox" checked={!!profile.availability} onChange={toggleAvailability} /><span className="track"></span></label>
+            </div>
           </div>
         )}
 
         {tab === 'alerts' && (
           <>
-            {db.notifications.filter((n) => n.userId === me).length === 0 && <div className="card center"><div style={{ fontSize: 34 }}>🔔</div><p className="muted">No alerts yet.</p></div>}
+            {db.notifications.filter((n) => n.userId === me).length === 0 && <div className="card empty"><div className="ei">🔔</div><p className="muted">No alerts yet.</p></div>}
             {db.notifications.filter((n) => n.userId === me).map((n) => (<div key={n.id} className="card" style={{ padding: '12px 16px' }}>{n.text}<div className="small muted">{new Date(n.at).toLocaleString()}</div></div>))}
           </>
         )}
       </main>
+      <nav className="bottomnav" aria-label="Main">
+        <button className={tab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}><span>📋</span>{t(lang, 'jobs')}</button>
+        <button className={tab === 'leads' ? 'active' : ''} onClick={() => setTab('leads')}><span>💬</span>{t(lang, 'myBids')}</button>
+        <button className={`center ${tab === 'wallet' ? 'active' : ''}`} onClick={() => setTab('wallet')}><span>🪙</span>{t(lang, 'wallet')}</button>
+        <button className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}><span>🧰</span>{t(lang, 'profile')}</button>
+        <button className={tab === 'alerts' ? 'active' : ''} onClick={() => { setTab('alerts'); markAllRead(); }}><span>🔔</span>{t(lang, 'alerts')}{unread > 0 && <span className="nb-badge">{unread}</span>}</button>
+      </nav>
     </div>
   );
 }

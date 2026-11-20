@@ -2,9 +2,16 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSession, clearSession, useServio } from '../lib/store';
-import { LANGS, t, getLang, setLang } from '../lib/i18n';
+import { t, getLang, setLang } from '../lib/i18n';
 
-// Top bar for seeker / provider: brand, language toggle, alerts bell, logout.
+// Top bar — mirrors the prototype .topbar: midnight bar, brass logo mark,
+// segmented language switch (اردو / Roman / EN), coin pill for providers.
+const LANG_BTNS = [
+  { id: 'ur', label: 'اردو' },
+  { id: 'ro', label: 'Roman' },
+  { id: 'en', label: 'EN' },
+];
+
 export default function AppHeader({ role }) {
   const router = useRouter();
   const db = useServio();
@@ -14,18 +21,26 @@ export default function AppHeader({ role }) {
   useEffect(() => { setLangState(getLang()); setMe(getSession()); }, []);
 
   const unread = db && me ? db.notifications.filter((n) => n.userId === me.userId && !n.read).length : 0;
+  const balance = db && me && db.wallets[me.userId] ? db.wallets[me.userId].balance : null;
 
   const changeLang = (l) => { setLang(l); setLangState(l); window.dispatchEvent(new CustomEvent('servio-lang')); };
 
   return (
-    <header className="app-header">
-      <div className="brand">Servio</div>
-      <div className="header-actions">
-        <select aria-label="Language" value={lang} onChange={(e) => changeLang(e.target.value)} className="lang-select">
-          {LANGS.map((l) => (<option key={l.id} value={l.id}>{l.label}</option>))}
-        </select>
-        <span className="bell" title={t(lang, 'alerts')}>🔔{unread > 0 && <span className="badge">{unread}</span>}</span>
-        <button className="btn btn-ghost btn-sm" onClick={() => { clearSession(); router.replace('/login'); }}>{t(lang, 'logout')}</button>
+    <header className="topbar">
+      <div className="topbar-in">
+        <div className="logo"><div className="logo-mark">S</div><b>Servio</b></div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {role === 'provider' && balance !== null && (
+            <span className="coin-pill" aria-label="Wallet">🪙 {balance}</span>
+          )}
+          <button className="bell-btn" title={t(lang, 'alerts')} aria-label={t(lang, 'alerts')}>🔔{unread > 0 && <span className="badge">{unread}</span>}</button>
+          <div className="lang-switch" role="group" aria-label="Language">
+            {LANG_BTNS.map((l) => (
+              <button key={l.id} className={lang === l.id ? 'active' : ''} onClick={() => changeLang(l.id)}>{l.label}</button>
+            ))}
+          </div>
+          <button className="logout-btn" onClick={() => { clearSession(); router.replace('/login'); }}>{t(lang, 'logout')}</button>
+        </div>
       </div>
     </header>
   );

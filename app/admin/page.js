@@ -71,15 +71,15 @@ export default function AdminPage() {
   }, { toast: approve ? 'Refund approved: +5 coins' : 'Refund claim closed', toastFor: [claim.providerId] });
 
   const Metric = ({ label, value, target, suffix }) => (
-    <div className="metric"><div className="muted small">{label}</div><div className="num">{value}{suffix || ''}</div>
+    <div className="metric-card"><div className="muted small">{label}</div><div className="metric-num">{value}{suffix || ''}</div>
       <div className="small muted">Target: {target}{suffix || ''} (60 days)</div>
-      <div className="progress"><div style={{ width: Math.min(100, Math.round((value / target) * 100)) + '%' }} /></div></div>
+      <div className="bar"><i style={{ width: Math.min(100, Math.round((value / target) * 100)) + '%' }} /></div></div>
   );
 
   return (
     <div className="admin-shell">
       <aside className="admin-side">
-        <div className="brand">Servio</div>
+        <div className="logo"><div className="logo-mark">S</div><b>Servio</b></div>
         {SECTIONS.map(([id, label]) => (
           <button key={id} className={`side-btn ${sec === id ? 'sel' : ''}`} onClick={() => setSec(id)}>
             {label}{id === 'topups' && pendingTopups ? ` (${pendingTopups})` : ''}{id === 'refunds' && pendingRefunds ? ` (${pendingRefunds})` : ''}{id === 'numbers' && heldBids.length ? ` (${heldBids.length})` : ''}
@@ -149,9 +149,9 @@ export default function AdminPage() {
         {sec === 'cats' && (
           <>
             <h3>Categories</h3>
-            {db.categories.map((c) => (<div key={c.id} className="card" style={{ padding: '10px 16px', margin: '8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>{c.icon} {c.en} · {c.ro} · {c.ur}</span><label className="check-row" style={{ margin: 0 }}><input type="checkbox" checked={c.active} onChange={() => transact((d) => { const x = d.categories.find((y) => y.id === c.id); x.active = !x.active; logActivity(d, `Category ${x.active ? 'enabled' : 'disabled'} — ${x.en}`); })} /> On</label></div>))}
+            {db.categories.map((c) => (<div key={c.id} className="field-row" style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: '10px 16px', margin: '8px 0' }}><span className="fi">{c.icon}</span><div className="fv"><b>{c.en}</b><small>{c.ro} · {c.ur}</small></div><label className="switch"><input type="checkbox" checked={c.active} onChange={() => transact((d) => { const x = d.categories.find((y) => y.id === c.id); x.active = !x.active; logActivity(d, `Category ${x.active ? 'enabled' : 'disabled'} — ${x.en}`); })} /><span className="track"></span></label></div>))}
             <h3>Areas</h3>
-            {db.areas.map((a) => (<div key={a.name} className="card" style={{ padding: '10px 16px', margin: '8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>{a.name}</span><label className="check-row" style={{ margin: 0 }}><input type="checkbox" checked={a.active} onChange={() => transact((d) => { const x = d.areas.find((y) => y.name === a.name); x.active = !x.active; logActivity(d, `Area ${x.active ? 'enabled' : 'disabled'} — ${x.name}`); })} /> On</label></div>))}
+            {db.areas.map((a) => (<div key={a.name} className="field-row" style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: '10px 16px', margin: '8px 0' }}><span className="fi">📍</span><div className="fv"><b>{a.name}</b><small>{a.active ? 'ON' : 'OFF'}</small></div><label className="switch"><input type="checkbox" checked={a.active} onChange={() => transact((d) => { const x = d.areas.find((y) => y.name === a.name); x.active = !x.active; logActivity(d, `Area ${x.active ? 'enabled' : 'disabled'} — ${x.name}`); })} /><span className="track"></span></label></div>))}
           </>
         )}
 
