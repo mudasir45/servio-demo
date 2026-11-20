@@ -1,45 +1,46 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getSession, clearSession, useServio } from '../lib/store';
-import { t, getLang, setLang } from '../lib/i18n';
+import { getSession, useServio } from '../lib/store';
+import { getLang, setLang } from '../lib/i18n';
 
-// Top bar — mirrors the prototype .topbar: midnight bar, brass logo mark,
-// segmented language switch (اردو / Roman / EN), coin pill for providers.
+// Prototype topbar, exactly: brass S logo-mark + serif "Servio" on the left;
+// on the right ONLY the coin pill (providers, live balance — tapping it opens
+// the wallet, like the prototype's showView('wallet')) and the segmented
+// language pill (اردو / Roman / EN). No bell, no logout in the header —
+// alerts live in the screens, logout lives in Settings (prototype pattern).
 const LANG_BTNS = [
   { id: 'ur', label: 'اردو' },
   { id: 'ro', label: 'Roman' },
   { id: 'en', label: 'EN' },
 ];
 
-export default function AppHeader({ role }) {
-  const router = useRouter();
+export default function AppHeader({ role, showCoins }) {
   const db = useServio();
   const [lang, setLangState] = useState('ro');
   const [me, setMe] = useState(null);
 
   useEffect(() => { setLangState(getLang()); setMe(getSession()); }, []);
 
-  const unread = db && me ? db.notifications.filter((n) => n.userId === me.userId && !n.read).length : 0;
   const balance = db && me && db.wallets[me.userId] ? db.wallets[me.userId].balance : null;
+  const coinsVisible = showCoins !== undefined ? showCoins : role === 'provider';
 
   const changeLang = (l) => { setLang(l); setLangState(l); window.dispatchEvent(new CustomEvent('servio-lang')); };
+  const gotoWallet = () => window.dispatchEvent(new CustomEvent('servio-goto', { detail: 'wallet' }));
 
   return (
     <header className="topbar">
       <div className="topbar-in">
         <div className="logo"><div className="logo-mark">S</div><b>Servio</b></div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {role === 'provider' && balance !== null && (
-            <span className="coin-pill" aria-label="Wallet">🪙 {balance}</span>
+          {coinsVisible && balance !== null && (
+            <button className="coin-pill" onClick={gotoWallet} aria-label="Wallet">🪙 {balance}</button>
           )}
-          <button className="bell-btn" title={t(lang, 'alerts')} aria-label={t(lang, 'alerts')}>🔔{unread > 0 && <span className="badge">{unread}</span>}</button>
           <div className="lang-switch" role="group" aria-label="Language">
             {LANG_BTNS.map((l) => (
               <button key={l.id} className={lang === l.id ? 'active' : ''} onClick={() => changeLang(l.id)}>{l.label}</button>
             ))}
           </div>
-          <button className="logout-btn" onClick={() => { clearSession(); router.replace('/login'); }}>{t(lang, 'logout')}</button>
         </div>
       </div>
     </header>
@@ -73,4 +74,13 @@ export function useLang() {
     return () => { window.removeEventListener('servio-lang', read); window.removeEventListener('storage', read); };
   }, []);
   return lang;
+}
+
+// Hook: pages listen for header coin-pill taps ('wallet') and other nav jumps.
+export function useGoto(setTab) {
+  useEffect(() => {
+    const h = (e) => setTab(e.detail);
+    window.addEventListener('servio-goto', h);
+    return () => window.removeEventListener('servio-goto', h);
+  }, [setTab]);
 }
