@@ -4,8 +4,9 @@ import { useRouter } from 'next/navigation';
 import AppHeader, { useGuard, useLang, useGoto } from '../../components/AppHeader';
 import BottomNav from '../../components/BottomNav';
 import { ObStep, ProfileCard, OBQ, expToYears, yearsToExp, chargesToPrice, priceToCharges } from '../../components/Onboarding';
-import { Dots, ListenBtn, Celebrate, ScreeningModal, priceText, priceTypeLabel, stars } from '../../components/ui';
-import { useServio, transact, uid, notify, notifyAdmins, logActivity, findPhone, stripPhone, userName, catName, setSession, clearSession } from '../../lib/store';
+import { Dots, ListenBtn, Celebrate, ScreeningModal, priceText, priceTypeLabel, stars, ProviderAvatar } from '../../components/ui';
+import SelfieStep from '../../components/SelfieStep';
+import { useServio, transact, uid, notify, notifyAdmins, logActivity, findPhone, stripPhone, userName, catName, setSession, clearSession, acceptRevealRequest, declineRevealRequest, exchangeNumbers } from '../../lib/store';
 import { COIN_PKR } from '../../lib/seed';
 import { t, p } from '../../lib/i18n';
 
@@ -94,9 +95,10 @@ export default function ProviderPage() {
   };
   const catOf = (j) => db.categories.find((c) => c.id === j.categoryId) || { icon: '🧰' };
 
-  /* ---------- coin reveal: provider pays 5 coins to see the seeker's number.
-     Same reveal record + coin rules as store.doReveal, with the notification
-     worded for this direction (the seeker is told who saw their number). */
+  /* ---------- coin reveal: provider taps Number himself — he is choosing to
+     spend his own 5 coins, so this stays instant (store.exchangeNumbers).
+     If the seeker had a pending number request for this pair, the exchange
+     marks it accepted — the pair is charged once only. */
   const openCoinReveal = (job) => {
     const rec = revealFor(job);
     if (rec && !rec.refunded) { setToast('Already shown — FREE hai, coins nahi lage'); return; }
@@ -107,24 +109,43 @@ export default function ProviderPage() {
   const confirmCoinReveal = () => {
     const job = coinJob; if (!job) return;
     let result;
-    transact((d) => {
-      const w = d.wallets[me];
-      const existing = d.reveals.find((r) => r.seekerId === job.seekerId && r.providerId === me && !r.refunded);
-      if (existing) { result = 'already'; return; }
-      const j = d.jobs.find((x) => x.id === job.id);
-      if (j && j.revealCount >= 3) { result = 'full'; return; }
-      if (!w || w.balance < 5) { result = 'low'; return; }
-      w.balance -= 5;
-      w.txns.unshift({ id: uid(), type: 'reveal', amount: -5, note: `Number shown — ${userName(d, job.seekerId)}`, at: Date.now() });
-      d.reveals.unshift({ id: uid(), jobId: job.id, seekerId: job.seekerId, providerId: me, coins: 5, at: Date.now(), refunded: false });
-      if (j) j.revealCount += 1;
-      notify(d, job.seekerId, `${userName(d, me)} ne aap ka number dekha (${catName(d, job.categoryId)}, ${job.area}).`);
-      notifyAdmins(d, `Reveal: ${userName(d, me)} ↔ ${userName(d, job.seekerId)} (5 coins).`);
-      logActivity(d, `Reveal — ${userName(d, me)} ↔ ${userName(d, job.seekerId)} (5 coins)`);
-      result = 'ok';
-    }, { toast: '📞 Number mil gaya', toastFor: [job.seekerId] });
+    transact((d) => { result = exchangeNumbers(d, { seekerId: job.seekerId, providerId: me, jobId: job.id, initiatedBy: 'provider' }); },
+      { toast: '📞 Number mil gaya', toastFor: [job.seekerId] });
     setCoinJob(null);
     if (result === 'low') { setToast('🪙 Coins khatam — top-up karein'); setTab('wallet'); }
+    else if (result === 'full') setToast('🔒 Is job ke 3 numbers pehle hi dikhaye ja chuke hain');
+  };
+
+  /* ---------- number requests from seekers: coins move ONLY on Accept.
+     Accept runs the reveal rule at acceptance time; on low coins / full job
+     the request STAYS pending so it can be accepted later. */
+  const pendingRequests = (db.revealRequests || []).filter((r) => r.providerId === me && r.status === 'pending');
+  const acceptRequest = (req) => {
+    let result;
+    transact((d) => { result = acceptRevealRequest(d, req.id); });
+    if (result === 'ok' || result === 'already') {
+      transact(() => {}, { toast: '📞 Number mil gaya — request accept ho gayi', toastFor: [req.seekerId] });
+      setToast(result === 'ok' ? '✓ Accept ho gaya — 5 coins lage, number mil gaya' : '✓ Number pehle se mila hua tha — FREE');
+    } else if (result === 'low') {
+      setToast('🪙 Coins kam hain — pehle top up karein');
+    } else if (result === 'full') {
+      setToast('🔒 Is job ke 3 numbers pehle hi dikhaye ja chuke hain');
+    } else if (result === 'suspended') {
+      setToast('Account active nahi hai');
+    }
+  };
+  const rejectRequest = (req) => {
+    let result;
+    transact((d) => { result = declineRevealRequest(d, req.id); });
+    if (result === 'ok') {
+      transact(() => {}, { toast: 'Number request accept nahi hui', toastFor: [req.seekerId] });
+      setToast('Request reject ho gayi — koi coins nahi lage');
+    }
+  };
+  const saveSelfie = (dataUrl) => {
+    transact((d) => { if (d.providers[me]) d.providers[me].photo = dataUrl; logActivity(d, `Selfie updated — ${userName(d, me)}`); });
+    setTab('profile');
+    setToast('✓ Selfie verify ho gayi');
   };
 
   /* ---------- report a bad lead (existing store semantics: instant refund) */
@@ -179,7 +200,7 @@ export default function ProviderPage() {
       logActivity(d, `Bid — ${userName(d, me)} bid on ${catName(d, job.categoryId)} job in ${job.area}`);
     }, { toast: `New bid from ${session.name}`, toastFor: [job.seekerId] });
     setScreen(null);
-    setSuccess({ title: 'Bid chali gayi!', sub: 'Seeker number mange to coins lagenge — bid FREE thi', btn1: { label: '📋 Jobs Dekhein', tab: 'jobs' } });
+    setSuccess({ title: 'Bid chali gayi!', sub: 'Bid FREE thi — seeker number request kare aur aap accept karein to 5 coins lagenge', btn1: { label: '📋 Jobs Dekhein', tab: 'jobs' } });
     setTab('success');
   };
   const sendBid = () => {
@@ -224,7 +245,7 @@ export default function ProviderPage() {
     const newName = (editProfile.name || '').trim() || session.name;
     transact((d) => {
       const pr = d.providers[me];
-      pr.categories = editProfile.work; pr.areas = editProfile.areas;
+      pr.categories = (editProfile.work || []).slice(0, 3); pr.areas = editProfile.areas;
       pr.experience = expToYears(editProfile.exp); pr.price = chargesToPrice(editProfile.charges);
       pr.availability = editProfile.avail;
       const u = d.users.find((x) => x.id === me);
@@ -238,12 +259,12 @@ export default function ProviderPage() {
 
   const navItems = [
     { key: 'home', icon: '🏠', label: t(lang, 'navHome') },
-    { key: 'jobs', icon: '📋', label: t(lang, 'navJobs') },
+    { key: 'jobs', icon: '📋', label: t(lang, 'navJobs'), badge: pendingRequests.length },
     { key: 'voice', icon: '🎙️', label: t(lang, 'navVoice'), center: true },
     { key: 'wallet', icon: '🪙', label: t(lang, 'navWallet') },
     { key: 'karigar', icon: '🧰', label: t(lang, 'navKarigar') },
   ];
-  const navActive = { home: 'home', alerts: 'home', jobs: 'jobs', bid: 'jobs', success: 'jobs', wallet: 'wallet', profile: 'karigar', edit: 'karigar', settings: 'karigar' }[tab] || 'jobs';
+  const navActive = { home: 'home', alerts: 'home', jobs: 'jobs', bid: 'jobs', success: 'jobs', wallet: 'wallet', profile: 'karigar', edit: 'karigar', settings: 'karigar', selfie: 'karigar' }[tab] || 'jobs';
   const navGo = (key) => {
     if (key === 'home') setTab('home');
     else if (key === 'jobs') setTab('jobs');
@@ -265,7 +286,7 @@ export default function ProviderPage() {
           <>
             <div className="card">
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <div className="avatar">{session.name.charAt(0)}</div>
+                <ProviderAvatar photo={profile.photo} name={session.name} />
                 <div style={{ flex: 1 }}>
                   <b style={{ fontSize: 19 }}>{session.name}</b>
                   <div className="small" style={{ color: 'var(--marigold-d)', fontWeight: 800 }}>{stars(profile.ratingAvg)} {profile.ratingAvg || 'New'} ({profile.ratingCount || 0})</div>
@@ -278,6 +299,13 @@ export default function ProviderPage() {
                 <label className="switch"><input type="checkbox" checked={!!profile.availability} onChange={toggleAvailability} /><span className="track"></span></label>
               </div>
             </div>
+            {pendingRequests.length > 0 && (
+              <div className="card hire-card" style={{ marginBottom: 12 }}>
+                <b>📞 {pendingRequests.length} number request{pendingRequests.length > 1 ? 's' : ''} aayi hain</b>
+                <p className="small muted" style={{ margin: '6px 0 10px' }}>Accept karein to number exchange hoga — 5 coins lagenge.</p>
+                <button className="btn btn-amber" onClick={() => setTab('jobs')}>{t(lang, 'reqTitle')} →</button>
+              </div>
+            )}
             {wallet.balance < 5 && (
               <div className="warn">🪙 Coins kam hain ({wallet.balance}) — number nahi dikh sakega. Top-up karein.
                 <div style={{ height: 8 }} /><button className="btn btn-amber" onClick={() => setTab('wallet')}>🪙 Top-up Karein</button>
@@ -295,6 +323,38 @@ export default function ProviderPage() {
 
         {tab === 'jobs' && (
           <>
+            {pendingRequests.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div className="section-head" style={{ marginTop: 0 }}>
+                  <h2 style={{ margin: 0, fontSize: 22 }}>{t(lang, 'reqTitle')} <span className="chip">{pendingRequests.length}</span></h2>
+                </div>
+                {pendingRequests.map((r) => {
+                  const seeker = db.users.find((u) => u.id === r.seekerId);
+                  const job = r.jobId ? db.jobs.find((j) => j.id === r.jobId) : null;
+                  return (
+                    <article key={r.id} className="job" style={{ borderColor: 'var(--brass)', borderWidth: 1.5 }}>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                        <span className="avatar">{(seeker ? seeker.name : 'S').charAt(0)}</span>
+                        <div style={{ flex: 1 }}>
+                          <b style={{ fontSize: 17 }}>{seeker ? seeker.name : 'Seeker'}</b>
+                          <div className="small muted">
+                            {job ? <>{catOf(job).icon} {jobTitle(job)} • 📍 {job.area}</> : (lang === 'en' ? 'Direct request from profile' : 'Profile se direct request')}
+                          </div>
+                          <div className="small muted">{new Date(r.at).toLocaleString()}</div>
+                        </div>
+                      </div>
+                      <p className="small" style={{ margin: '10px 0' }}>
+                        {lang === 'en' ? 'Accept = numbers exchanged, 5 coins from your wallet.' : 'Accept = number exchange hoga, aap ke wallet se 5 coins lagenge.'}
+                      </p>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 8 }}>
+                        <button className="btn btn-ghost" style={{ width: '100%', color: 'var(--red)' }} onClick={() => rejectRequest(r)}>{t(lang, 'reject')}</button>
+                        <button className="btn btn-amber" onClick={() => acceptRequest(r)}>{t(lang, 'accept')} — 5 🪙</button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
             <div className="section-head" style={{ marginTop: 0 }}>
               <h1 style={{ margin: 0 }}>{t(lang, 'jobsTitle')}</h1>
             </div>
@@ -469,10 +529,16 @@ export default function ProviderPage() {
               onAvail={toggleAvailability}
               photos={photos}
               onPhotos={(n) => { setPhotos(n); if (n > photos) setToast(`📷 Photo lag gayi (${n} / 10)`); }}
+              photo={profile.photo}
+              onRetake={() => { setTab('selfie'); window.scrollTo({ top: 0 }); }}
             />
             <div className="sticky-action"><button className="btn btn-primary" onClick={() => setToast('✅ Profile pehle se LIVE hai')}>{t(lang, 'goLive')}</button></div>
             <button className="btn btn-ghost" style={{ width: '100%', marginTop: 12 }} onClick={() => setTab('settings')}>{t(lang, 'settings')}</button>
           </>
+        )}
+
+        {tab === 'selfie' && (
+          <SelfieStep lang={lang} onDone={saveSelfie} onBack={() => setTab('profile')} />
         )}
 
         {tab === 'edit' && editProfile && (

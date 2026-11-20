@@ -3,10 +3,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppHeader, { useGuard, useLang } from '../../components/AppHeader';
 import BottomNav from '../../components/BottomNav';
-import { Dots, ListenBtn, Celebrate, ScreeningModal, priceText, priceTypeLabel, stars, avColor } from '../../components/ui';
+import { ListenBtn, Celebrate, ScreeningModal, priceText, priceTypeLabel, stars, avColor, ProviderAvatar } from '../../components/ui';
 import { PHOTO_ICONS } from '../../components/Onboarding';
-import { useServio, transact, uid, notify, notifyAdmins, logActivity, findPhone, stripPhone, doReveal, userName, catName, clearSession } from '../../lib/store';
-import { COIN_PKR, TINTS } from '../../lib/seed';
+import { useServio, transact, uid, notify, notifyAdmins, logActivity, findPhone, stripPhone, requestReveal, userName, catName, clearSession } from '../../lib/store';
+import { TINTS } from '../../lib/seed';
 import { t, p } from '../../lib/i18n';
 
 // The prototype's three voice samples, verbatim (category names mapped to store ids).
@@ -47,8 +47,6 @@ export default function SeekerPage() {
   const [providerId, setProviderId] = useState(null);
   const [playingId, setPlayingId] = useState(null);
   const playTimer = useRef(null);
-  const [reveal, setReveal] = useState(null); // {providerId, jobId, bid, stage}
-  const [lowCoinFor, setLowCoinFor] = useState(null);
   // Rating (hire prompt)
   const [dismissed, setDismissed] = useState([]);
   const [thanksName, setThanksName] = useState(null);
@@ -75,7 +73,6 @@ export default function SeekerPage() {
   const providerUsers = db.users.filter((u) => u.role === 'provider' && db.providers[u.id] && u.status === 'active');
   const avIndex = (pid) => Math.max(0, providerUsers.findIndex((u) => u.id === pid));
   const revealedFor = (pid) => db.reveals.find((r) => r.seekerId === me && r.providerId === pid && !r.refunded);
-  const providerPhone = (pid) => { const u = db.users.find((x) => x.id === pid); return u ? u.phone : ''; };
   const jobTitle = (j) => { const f = (j.description || '').split('.')[0]; return f.length > 52 ? f.slice(0, 52) + '…' : f; };
   const catOf = (id) => db.categories.find((c) => c.id === id) || { icon: '🧰' };
   const whenLabel = (j) => (lang === 'en' ? j.urgency : (WHEN_RO[j.urgency] || j.urgency));
@@ -160,44 +157,41 @@ export default function SeekerPage() {
     createJob();
   };
 
-  /* ---------- reveal (prototype revealModal; provider pays via store.doReveal) */
-  const openReveal = (pid, jobId, bid) => {
-    const prof = db.providers[pid] || {};
-    const bal = db.wallets[pid] ? db.wallets[pid].balance : 0;
-    const used = jobId ? db.reveals.filter((r) => r.seekerId === me && r.jobId === jobId && !r.refunded).length : 0;
-    if (revealedFor(pid)) { setReveal({ providerId: pid, jobId, bid, stage: 'done', used }); return; }
-    if (bal < 5) { setLowCoinFor(pid); setReveal({ providerId: pid, jobId, bid, stage: 'low', used }); return; }
-    setReveal({ providerId: pid, jobId, bid, stage: 'confirm', used });
-    void prof;
-  };
-  const confirmReveal = () => {
-    if (!reveal) return;
+  /* ---------- reveal by REQUEST: the seeker only asks. No coins move here —
+     the provider's Accept runs the 5-coin rule (store.acceptRevealRequest).
+     States per provider (+job): none -> pending -> accepted (number visible)
+     or declined (seeker may request again). */
+  const requests = db.revealRequests || [];
+  const requestFor = (pid, jobId) => requests
+    .filter((r) => r.seekerId === me && r.providerId === pid && (r.jobId || null) === (jobId || null))
+    .sort((a, b) => b.at - a.at)[0] || null;
+  const sendRequest = (pid, jobId) => {
     let result;
-    transact((d) => { result = doReveal(d, { seekerId: me, providerId: reveal.providerId, jobId: reveal.jobId }); },
-      { toast: 'A number was shown', toastFor: [reveal.providerId] });
-    if (result === 'ok' || result === 'already') setReveal({ ...reveal, stage: 'done' });
-    else if (result === 'low') { setLowCoinFor(reveal.providerId); setReveal({ ...reveal, stage: 'low' }); }
-    else if (result === 'full') { setReveal(null); setToast('🔒 Closed — 3 numbers shown'); }
-    else { setReveal(null); setToast('This provider is not available.'); }
+    transact((d) => { result = requestReveal(d, { seekerId: me, providerId: pid, jobId }); },
+      { toast: '📞 Number request aayi hai', toastFor: [pid] });
+    if (result === 'ok' || result === 'exists') setToast('📞 Request bheji gayi — provider ke jawab ka intezar');
+    else if (result === 'already') setToast('✓ Number pehle se mila hua hai');
   };
-  const lowCoinTopup = () => {
-    const pid = lowCoinFor; if (!pid) return;
-    transact((d) => {
-      const w = d.wallets[pid]; if (!w) return;
-      w.balance += 20;
-      w.txns.unshift({ id: uid(), type: 'topup', amount: 20, note: '🪙 Top-up (demo)', at: Date.now() });
-      logActivity(d, `Demo top-up — ${userName(d, pid)} +20 coins`);
-    });
-    setLowCoinFor(null);
-    setToast('🪙 +20 coins — ab number mil sakta hai');
+  // The request action area shared by bid cards and the provider profile.
+  const requestArea = (pid, jobId, closed) => {
+    const req = requestFor(pid, jobId);
+    if (req && req.status === 'pending') {
+      return <div className="closed-note" role="status">{t(lang, 'reqWaiting')}</div>;
+    }
+    return (
+      <>
+        {req && req.status === 'declined' && (
+          <p className="small" style={{ margin: '0 0 8px', color: 'var(--red)', fontWeight: 700 }}>{t(lang, 'reqDeclined')}</p>
+        )}
+        <button className="btn btn-primary" disabled={closed} onClick={() => sendRequest(pid, jobId)}>
+          {req && req.status === 'declined' ? t(lang, 'reqAgain') : t(lang, 'reqNumber')}
+        </button>
+        <p className="small muted" style={{ textAlign: 'center', margin: '8px 0 0' }}>
+          {lang === 'en' ? 'Request goes to the karigar — accept it and the number is yours. FREE for you.' : 'Request karigar ke paas jayegi — woh accept kare to number mil jayega. Aap ke liye FREE.'}
+        </p>
+      </>
+    );
   };
-  const lowCoinBanner = lowCoinFor ? (
-    <div className="card lowcoin-banner" style={{ marginBottom: 12 }}>
-      <b>🔔 {userName(db, lowCoinFor)} — coins kam hain ({db.wallets[lowCoinFor] ? db.wallets[lowCoinFor].balance : 0})</b>
-      <p className="small muted" style={{ margin: '6px 0 10px' }}>Number nahi dikh saka. Karigar ko top-up karna hoga.</p>
-      <button className="btn btn-amber" onClick={lowCoinTopup}>🪙 Top-up Karein (demo +20)</button>
-    </div>
-  ) : null;
 
   /* ---------- hire prompt / rating (prototype renderHirePrompts) */
   const hireAnswer = (yes) => {
@@ -305,7 +299,6 @@ export default function SeekerPage() {
               <button className="bigmic" aria-label="Bol kar kaam post karein" onClick={goPost}>🎙️</button>
               <div style={{ fontWeight: 800 }}>{p(lang, 'tapMic')}</div>
             </div>
-            {lowCoinBanner}
             {hirePrompt}
             {pwaCard}
             <div className="section-head"><h2>{p(lang, 'catTitle')}</h2></div>
@@ -414,7 +407,6 @@ export default function SeekerPage() {
         {tab === 'jobs' && (
           <>
             <h1 style={{ marginTop: 0 }}>📋 {t(lang, 'myPosted')}</h1>
-            {lowCoinBanner}
             {hirePrompt}
             {myJobs.length === 0 && (
               <div className="card empty"><div className="ei">📋</div><p className="muted">Abhi koi job post nahi hui</p><button className="btn btn-primary" onClick={goPost}>🎙️ Pehli Job Post Karein</button></div>
@@ -456,7 +448,7 @@ export default function SeekerPage() {
                 <article key={b.id} className="job">
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                     <button className="provider-link" onClick={() => { setProviderId(pu.id); setTab('provider'); }} aria-label="Profile dekhein">
-                      <span className="avatar" style={{ background: avColor(avIndex(pu.id)) }}>{pu.name.charAt(0)}</span>
+                      <ProviderAvatar photo={prof.photo} name={pu.name} bg={avColor(avIndex(pu.id))} />
                     </button>
                     <div style={{ flex: 1 }}>
                       <button className="provider-link" onClick={() => { setProviderId(pu.id); setTab('provider'); }}><b style={{ fontSize: 17 }}>{pu.name} →</b></button>
@@ -489,7 +481,7 @@ export default function SeekerPage() {
                   ) : closed ? (
                     <div className="closed-note">{t(lang, 'closed3')}</div>
                   ) : (
-                    <button className="btn btn-primary" onClick={() => openReveal(b.providerId, bidsJob.id, b)}>{t(lang, 'showNumber')} <Dots n={bidsUsed} light /></button>
+                    requestArea(b.providerId, bidsJob.id, false)
                   )}
                 </article>
               );
@@ -504,7 +496,7 @@ export default function SeekerPage() {
             <div className="card" style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 36 }}>🪙</div>
               <b>Seeker ke liye Servio FREE hai</b>
-              <p className="small muted" style={{ margin: '6px 0 0' }}>Number dikhane ke coins karigar deta hai — aap se kuch nahi katega.</p>
+              <p className="small muted" style={{ margin: '6px 0 0' }}>Number ke coins karigar request accept karne par deta hai — aap se kuch nahi katega.</p>
             </div>
             <h2 style={{ margin: '20px 0 8px' }}>Mere numbers</h2>
             {myReveals.length === 0 && <div className="card empty"><div className="ei">📞</div><p className="muted">Abhi koi number nahi dikhaya gaya</p></div>}
@@ -514,7 +506,7 @@ export default function SeekerPage() {
               return (
                 <article key={r.id} className="job">
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <span className="avatar" style={{ background: avColor(avIndex(pu.id)) }}>{pu.name.charAt(0)}</span>
+                    <ProviderAvatar photo={(db.providers[pu.id] || {}).photo} name={pu.name} bg={avColor(avIndex(pu.id))} />
                     <div style={{ flex: 1 }}><b style={{ fontSize: 17 }}>{pu.name}</b><div className="small muted">{new Date(r.at).toLocaleDateString()}</div></div>
                     {r.refunded && <span className="chip chip-red">Refunded</span>}
                   </div>
@@ -540,7 +532,7 @@ export default function SeekerPage() {
               return (
                 <article key={u.id} className="job">
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <span className="avatar" style={{ background: avColor(i) }}>{u.name.charAt(0)}</span>
+                    <ProviderAvatar photo={pr.photo} name={u.name} bg={avColor(i)} />
                     <div style={{ flex: 1 }}>
                       <b style={{ fontSize: 17 }}>{u.name}</b>
                       <div className="small" style={{ color: 'var(--marigold-d)', fontWeight: 800 }}>{stars(pr.ratingAvg)} {pr.ratingAvg || 'New'} ({pr.ratingCount || 0})</div>
@@ -565,7 +557,7 @@ export default function SeekerPage() {
               return (
                 <div className="card">
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <span className="avatar" style={{ background: avColor(avIndex(detailProvider.id)), width: 64, height: 64, flexBasis: 64, fontSize: 28 }}>{detailProvider.name.charAt(0)}</span>
+                    <ProviderAvatar photo={pr.photo} name={detailProvider.name} size={64} bg={avColor(avIndex(detailProvider.id))} />
                     <div>
                       <b style={{ fontSize: 20 }}>{detailProvider.name}</b>
                       <div style={{ color: 'var(--marigold-d)', fontWeight: 800 }}>{stars(pr.ratingAvg)} {pr.ratingAvg || 'New'} ({pr.ratingCount || 0} ratings)</div>
@@ -591,10 +583,7 @@ export default function SeekerPage() {
                         </div>
                       </div>
                     ) : (
-                      <>
-                        <button className="btn btn-primary" onClick={() => openReveal(detailProvider.id, null, null)}>{t(lang, 'contact')}</button>
-                        <p className="small muted" style={{ textAlign: 'center', margin: '8px 0 0' }}>5 coins = PKR {5 * COIN_PKR} ({detailProvider.name} ke wallet se)</p>
-                      </>
+                      requestArea(detailProvider.id, null, false)
                     )}
                   </div>
                 </div>
@@ -627,47 +616,6 @@ export default function SeekerPage() {
           </>
         )}
       </main>
-
-      {/* Reveal modal (prototype revealModal) */}
-      {reveal && (
-        <div className="modal open">
-          <div className="modal-card">
-            <h3>📞 {p(lang, 'revealTitle')}</h3>
-            <p className="muted" style={{ margin: '0 0 12px' }}>
-              {userName(db, reveal.providerId)} • {reveal.bid ? priceText(reveal.bid) : (db.providers[reveal.providerId] ? (db.providers[reveal.providerId].categories || []).map((c) => catName(db, c, lang)).join(' • ') : '')} • {(db.providers[reveal.providerId] || {}).areas?.[0] || ''}
-            </p>
-            {reveal.stage === 'confirm' && (
-              <>
-                <div style={{ background: '#F3EAD8', border: '1px solid var(--line)', borderRadius: 12, padding: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>{p(lang, 'slotsL')}</span><Dots n={reveal.used} />
-                </div>
-                <p className="small muted" style={{ margin: '10px 0 0' }}>5 coins = PKR 50 — {userName(db, reveal.providerId)} ke wallet se katega. Baad mein bachega: {(db.wallets[reveal.providerId] ? db.wallets[reveal.providerId].balance : 0) - 5} coins.</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 10, marginTop: 16 }}>
-                  <button className="btn btn-ghost" style={{ width: '100%' }} onClick={() => setReveal(null)}>✕</button>
-                  <button className="btn btn-primary" onClick={confirmReveal}>✓ {p(lang, 'yesNum')}</button>
-                </div>
-              </>
-            )}
-            {reveal.stage === 'done' && (
-              <div style={{ marginTop: 12, background: 'var(--leaf-bg)', borderRadius: 12, padding: 14 }}>
-                <b style={{ fontSize: 19 }}>📞 <span dir="ltr">{providerPhone(reveal.providerId)}</span></b>
-                <div className="contact-actions">
-                  <a className="btn btn-call" style={{ textDecoration: 'none' }} href={`tel:${providerPhone(reveal.providerId).replace(/-/g, '')}`}>📞 Call</a>
-                  <button className="btn btn-wa" onClick={() => setToast('WhatsApp khul raha hai (demo)')}>💬 WhatsApp</button>
-                </div>
-                <button className="btn btn-ghost" style={{ width: '100%', marginTop: 12 }} onClick={() => setReveal(null)}>✕ {p(lang, 'close')}</button>
-              </div>
-            )}
-            {reveal.stage === 'low' && (
-              <div style={{ marginTop: 12, background: 'var(--leaf-bg)', borderRadius: 12, padding: 14 }}>
-                <b style={{ fontSize: 18 }}>Not available right now</b>
-                <p className="small muted" style={{ margin: '6px 0 0' }}>Thodi der baad dobara try karein, ya doosra karigar chunein.</p>
-                <button className="btn btn-ghost" style={{ width: '100%', marginTop: 12 }} onClick={() => setReveal(null)}>✕ {p(lang, 'close')}</button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       <ScreeningModal found={screen?.found} cleaned={screen?.cleaned} onContinue={() => createJob(screen.cleaned)} onClose={() => setScreen(null)} />
 

@@ -1,1 +1,1 @@
-{"dependencies":{"next":"^15.1.6","react":"^19.0.0","react-dom":"^19.0.0"},"name":"servio-nextjs","private":true,"scripts":{"build":"next build","dev":"next dev","start":"next start"},"version":"0.1.0"}
+{"dependencies":{"@tensorflow-models/blazeface":"^0.1.0","@tensorflow/tfjs":"^4.22.0","next":"^15.1.6","react":"^19.0.0","react-dom":"^19.0.0"},"name":"servio-nextjs","private":true,"scripts":{"build":"next build","dev":"next dev","start":"next start"},"version":"0.1.0"}

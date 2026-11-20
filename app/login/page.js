@@ -7,6 +7,7 @@ import { t, p, setLang } from '../../lib/i18n';
 import { useLang } from '../../components/AppHeader';
 import BottomNav from '../../components/BottomNav';
 import { ObStep, ProfileCard, OBQ, expToYears, chargesToPrice } from '../../components/Onboarding';
+import SelfieStep from '../../components/SelfieStep';
 import { Celebrate } from '../../components/ui';
 
 const DEMO = [
@@ -52,8 +53,11 @@ export default function LoginPage() {
   const router = useRouter();
   const db = useServio();
   const lang = useLang();
-  const [tab, setTab] = useState('login'); // login | seeker | provider
-  const [step, setStep] = useState('form'); // form | onboard | profile | celebrate
+  // ONE login for everyone (phone + OTP; admin uses PIN). The account's role
+  // decides where the user lands. Signup is separate and starts with a choice.
+  const [mode, setMode] = useState('login'); // login | signup
+  const [signupRole, setSignupRole] = useState(null); // null = choice screen | seeker | provider
+  const [step, setStep] = useState('form'); // form | onboard | selfie | profile | celebrate
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
@@ -71,6 +75,10 @@ export default function LoginPage() {
   const [obReturnTo, setObReturnTo] = useState(null);
   const [photos, setPhotos] = useState(0);
   const [newUser, setNewUser] = useState(null);
+  // Verified face-cropped selfie (data URL) — required before a provider
+  // account can be created; no face detected = no account.
+  const [selfie, setSelfie] = useState(null);
+  const [selfieReturn, setSelfieReturn] = useState(null); // 'profile' when retaking from the profile card
 
   useEffect(() => {
     const s = getSession();
@@ -87,6 +95,10 @@ export default function LoginPage() {
     try { if (openTab) localStorage.setItem('servio-open-tab', openTab); } catch {}
     router.replace(user.role === 'admin' ? '/admin' : user.role === 'provider' ? '/provider' : '/seeker');
   };
+
+  const closeCodes = () => { setOtpOpen(false); setPinOpen(false); setOtpError(false); setPinError(false); setError(''); };
+
+  const switchMode = (m) => { setMode(m); setSignupRole(null); closeCodes(); };
 
   const startLogin = (ph) => {
     setError(''); setOtpError(false); setPinError(false);
@@ -111,16 +123,17 @@ export default function LoginPage() {
   const verifyOtp = () => {
     if (otpDigits.join('') !== DEMO_OTP) { setOtpError(true); return; }
     setOtpError(false);
-    if (tab === 'login') { goHome(pendingUser); return; }
-    if (tab === 'seeker') {
+    if (mode === 'login') { goHome(pendingUser); return; }
+    if (signupRole === 'seeker') {
+      // Seeker signup = 3 simple steps: name, phone, OTP. Done.
       const user = { id: 'u-' + uid(), name: name.trim(), phone: phone.trim(), role: 'seeker', status: 'active' };
       transact((d) => { d.users.push(user); logActivity(d, `New seeker signed up — ${user.name}`); },
         { toast: `New seeker: ${user.name}`, toastFor: adminIds });
       goHome(user); return;
     }
-    // Provider: run the prototype's 6-step voice onboarding next.
+    // Provider: 6-step voice onboarding, then the selfie gate, then profile card.
     setObProfile({ name: name.trim(), work: [], areas: [], exp: '', charges: '', avail: true });
-    setObStep(0); setObReturnTo(null); setPhotos(0);
+    setObStep(0); setObReturnTo(null); setPhotos(0); setSelfie(null); setSelfieReturn(null);
     setStep('onboard');
     window.scrollTo({ top: 0 });
   };
@@ -132,20 +145,22 @@ export default function LoginPage() {
   };
 
   // Profile-card confirm: creates the provider in the shared store with
-  // 40 starter coins (same store-write shape as before), then celebrate.
+  // 40 starter coins and the verified face photo, then celebrate.
   const finishProviderSignup = () => {
     if (!obProfile.name.trim()) { setToast('Pehle naam aur kaam bolo 🎙️'); setObStep(0); setObReturnTo(null); setStep('onboard'); return; }
     if (!obProfile.work.length) { setToast('Pehle naam aur kaam bolo 🎙️'); setObStep(1); setObReturnTo(null); setStep('onboard'); return; }
+    if (!selfie) { setToast('Pehle selfie verify karein 📷'); setSelfieReturn('profile'); setStep('selfie'); return; }
     const user = { id: 'u-' + uid(), name: obProfile.name.trim(), phone: phone.trim(), role: 'provider', status: 'active' };
     transact((d) => {
       d.users.push(user);
       d.providers[user.id] = {
-        categories: obProfile.work, areas: obProfile.areas,
+        categories: obProfile.work.slice(0, 3), areas: obProfile.areas,
         experience: expToYears(obProfile.exp), price: chargesToPrice(obProfile.charges),
         availability: obProfile.avail, ratingAvg: 0, ratingCount: 0, bio: '',
+        photo: selfie, // face-cropped selfie from the verification step
       };
       d.wallets[user.id] = { balance: 40, txns: [{ id: uid(), type: 'starter', amount: 40, note: 'Starter coins', at: Date.now() }] };
-      logActivity(d, `New provider signed up — ${user.name} (40 starter coins)`);
+      logActivity(d, `New provider signed up — ${user.name} (40 starter coins, selfie verified)`);
     }, { toast: `New provider: ${user.name}`, toastFor: adminIds });
     setNewUser(user);
     setStep('celebrate');
@@ -156,7 +171,7 @@ export default function LoginPage() {
   const obNext = () => {
     if (obReturnTo === 'profile') { setObReturnTo(null); setStep('profile'); return; }
     if (obStep < 5) setObStep(obStep + 1);
-    else { setStep('profile'); setToast('✅ Profile tayyar hai — check karein'); }
+    else { setStep('selfie'); setToast('📷 Ab selfie — chehra verify karein'); }
     window.scrollTo({ top: 0 });
   };
   const obBack = () => {
@@ -171,8 +186,18 @@ export default function LoginPage() {
     setToast('🎙️ Dobara bolo ya badal do');
     window.scrollTo({ top: 0 });
   };
+  const selfieDone = (dataUrl) => {
+    setSelfie(dataUrl);
+    if (selfieReturn === 'profile') { setSelfieReturn(null); setStep('profile'); }
+    else { setStep('profile'); setToast('✅ Profile tayyar hai — check karein'); }
+    window.scrollTo({ top: 0 });
+  };
+  const selfieBack = () => {
+    if (selfieReturn === 'profile') { setSelfieReturn(null); setStep('profile'); }
+    else { setObStep(5); setStep('onboard'); }
+    window.scrollTo({ top: 0 });
+  };
 
-  const pickRole = (r) => { setTab(r); setOtpOpen(false); setPinOpen(false); setError(''); };
   const changeLang = (l) => { setLang(l); window.dispatchEvent(new CustomEvent('servio-lang')); };
   const navItems = [
     { key: 'home', icon: '🏠', label: t(lang, 'navHome') },
@@ -182,7 +207,47 @@ export default function LoginPage() {
     { key: 'karigar', icon: '🧰', label: t(lang, 'navKarigar') },
   ];
   const navNudge = () => { setToast('Pehle login / signup karein'); document.getElementById('auth-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
-  const inOnboarding = step === 'onboard' || step === 'profile' || step === 'celebrate';
+  const inOnboarding = step === 'onboard' || step === 'selfie' || step === 'profile' || step === 'celebrate';
+
+  const codeBlocks = (
+    <>
+      {otpOpen && (
+        <div>
+          <p style={{ textAlign: 'center', margin: '16px 0 0' }}><b>{p(lang, 'otpTitle')}</b> &nbsp;<span className="chip">Demo: 1234</span></p>
+          <CodeBoxes digits={otpDigits} setDigits={(d) => { setOtpDigits(d); setOtpError(false); }} label="OTP" />
+          {otpError && (
+            <div className="error-box" style={{ display: 'block' }}>❌ Ghalat code — dobara try karein
+              <button className="btn btn-ghost" style={{ marginTop: 8, width: '100%' }} onClick={() => { setOtpDigits(['1', '2', '3', '4']); setOtpError(false); }}>↻ Retry</button>
+            </div>
+          )}
+          <button className="btn btn-amber" onClick={verifyOtp}>✓ {p(lang, 'verify')}</button>
+          <button className="skip-link" onClick={() => { setOtpDigits(['0', '0', '0', '0']); setOtpError(true); }}>Demo: ghalat code try karein</button>
+        </div>
+      )}
+      {pinOpen && (
+        <div>
+          <h3 style={{ textAlign: 'center', margin: '16px 0 0' }}>🔐 Admin PIN</h3>
+          <p className="muted" style={{ textAlign: 'center', margin: '4px 0 0' }}>Demo PIN: <b>9999</b></p>
+          <CodeBoxes digits={pinDigits} setDigits={(d) => { setPinDigits(d); setPinError(false); }} label="PIN" />
+          {pinError && <div className="error-box" style={{ display: 'block' }}>❌ Ghalat PIN</div>}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 10 }}>
+            <button className="btn btn-ghost" style={{ width: '100%' }} onClick={() => setPinOpen(false)}>✕</button>
+            <button className="btn btn-primary" onClick={verifyPin}>✓ Admin kholein</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  const phoneField = (
+    <>
+      <label style={{ marginTop: 0 }}>{p(lang, 'phoneLabel')}</label>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <select style={{ maxWidth: 92, flex: '0 0 92px' }} aria-label="Country code"><option>+92</option></select>
+        <input style={{ flex: 1, minWidth: 0 }} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="03XX-XXXXXXX" inputMode="tel" />
+      </div>
+    </>
+  );
 
   return (
     <div dir={lang === 'ur' ? 'rtl' : 'ltr'}>
@@ -210,81 +275,85 @@ export default function LoginPage() {
               <div style={{ fontWeight: 800 }}>{p(lang, 'tapMic')}</div>
             </div>
 
-            <div className="role-grid">
-              <button className={`role-card ${tab === 'seeker' ? 'selected' : ''}`} onClick={() => pickRole('seeker')}><span className="icon">🏠</span><b>{p(lang, 'seekerTitle')}</b></button>
-              <button className={`role-card ${tab === 'provider' ? 'selected' : ''}`} onClick={() => pickRole('provider')}><span className="icon">🧰</span><b>{p(lang, 'providerTitle')}</b></button>
-            </div>
-            <div className="pill-row" style={{ marginTop: 12, justifyContent: 'center' }}>
-              <button className={`pill ${tab === 'login' ? 'active' : ''}`} onClick={() => { setTab('login'); setOtpOpen(false); setPinOpen(false); setError(''); }}>Log in</button>
-              <button className={`pill ${tab !== 'login' ? 'active' : ''}`} onClick={() => pickRole(tab === 'login' ? 'seeker' : tab)}>Sign up</button>
+            <div className="pill-row" style={{ marginTop: 16, justifyContent: 'center' }}>
+              <button className={`pill ${mode === 'login' ? 'active' : ''}`} onClick={() => switchMode('login')}>Log in</button>
+              <button className={`pill ${mode === 'signup' ? 'active' : ''}`} onClick={() => switchMode('signup')}>Sign up</button>
             </div>
 
-            <div className="card" id="auth-card" style={{ marginTop: 16 }}>
-              {tab !== 'login' && (
-                <>
-                  <label style={{ marginTop: 0 }}>Aap ka naam?</label>
-                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Naam likhein…" />
-                </>
-              )}
-              <label style={tab !== 'login' ? undefined : { marginTop: 0 }}>{p(lang, 'phoneLabel')}</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <select style={{ maxWidth: 92 }} aria-label="Country code"><option>+92</option></select>
-                <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="03XX-XXXXXXX" inputMode="tel" />
-              </div>
-              {error && <div className="warn">{error}</div>}
-              {!otpOpen && !pinOpen && (
-                <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => (tab === 'login' ? startLogin() : startSignup())}>{p(lang, 'sendOtp')}</button>
-              )}
-              {otpOpen && (
-                <div>
-                  <p style={{ textAlign: 'center', margin: '16px 0 0' }}><b>{p(lang, 'otpTitle')}</b> &nbsp;<span className="chip">Demo: 1234</span></p>
-                  <CodeBoxes digits={otpDigits} setDigits={(d) => { setOtpDigits(d); setOtpError(false); }} label="OTP" />
-                  {otpError && (
-                    <div className="error-box" style={{ display: 'block' }}>❌ Ghalat code — dobara try karein
-                      <button className="btn btn-ghost" style={{ marginTop: 8, width: '100%' }} onClick={() => { setOtpDigits(['1', '2', '3', '4']); setOtpError(false); }}>↻ Retry</button>
-                    </div>
+            {mode === 'login' && (
+              <>
+                <div className="card" id="auth-card" style={{ marginTop: 12 }}>
+                  {phoneField}
+                  {error && <div className="warn">{error}</div>}
+                  {!otpOpen && !pinOpen && (
+                    <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => startLogin()}>{p(lang, 'sendOtp')}</button>
                   )}
-                  <button className="btn btn-amber" onClick={verifyOtp}>✓ {p(lang, 'verify')}</button>
-                  <button className="skip-link" onClick={() => { setOtpDigits(['0', '0', '0', '0']); setOtpError(true); }}>Demo: ghalat code try karein</button>
+                  {codeBlocks}
                 </div>
-              )}
-              {pinOpen && (
-                <div>
-                  <h3 style={{ textAlign: 'center', margin: '16px 0 0' }}>🔐 Admin PIN</h3>
-                  <p className="muted" style={{ textAlign: 'center', margin: '4px 0 0' }}>Demo PIN: <b>9999</b></p>
-                  <CodeBoxes digits={pinDigits} setDigits={(d) => { setPinDigits(d); setPinError(false); }} label="PIN" />
-                  {pinError && <div className="error-box" style={{ display: 'block' }}>❌ Ghalat PIN</div>}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 10 }}>
-                    <button className="btn btn-ghost" style={{ width: '100%' }} onClick={() => setPinOpen(false)}>✕</button>
-                    <button className="btn btn-primary" onClick={verifyPin}>✓ Admin kholein</button>
-                  </div>
+
+                <div className="section-head"><h2>Demo accounts — tap one</h2></div>
+                <div className="demo-grid" style={{ marginTop: 0 }}>
+                  {DEMO.map((d) => (
+                    <button key={d.phone} className="demo-card" onClick={() => { setMode('login'); startLogin(d.phone); }}>
+                      <span className="icon">{d.role === 'Seeker' ? '🏠' : d.role === 'Admin' ? '🛡️' : '🧰'}</span>
+                      <b>{d.name}</b><span className="chip">{d.role}</span>
+                      <div className="small muted" style={{ marginTop: 6 }}><span dir="ltr">{d.phone}</span><br />{d.note}</div>
+                    </button>
+                  ))}
                 </div>
-              )}
-            </div>
 
-            <div className="section-head"><h2>Demo accounts — tap one</h2></div>
-            <div className="demo-grid" style={{ marginTop: 0 }}>
-              {DEMO.map((d) => (
-                <button key={d.phone} className="demo-card" onClick={() => { setTab('login'); startLogin(d.phone); }}>
-                  <span className="icon">{d.role === 'Seeker' ? '🏠' : d.role === 'Admin' ? '🛡️' : '🧰'}</span>
-                  <b>{d.name}</b><span className="chip">{d.role}</span>
-                  <div className="small muted" style={{ marginTop: 6 }}><span dir="ltr">{d.phone}</span><br />{d.note}</div>
-                </button>
-              ))}
-            </div>
+                <div className="section-head"><h2>{p(lang, 'catTitle')}</h2></div>
+                <div className="cat-grid">
+                  {db.categories.map((c, i) => c.active ? (
+                    <button key={c.id} className="cat" style={{ background: TINTS[i % TINTS.length] }} onClick={navNudge}>
+                      <span className="ic">{c.icon}</span><b>{lang === 'ur' ? c.ur : lang === 'ro' ? c.ro : c.en}</b>
+                    </button>
+                  ) : null)}
+                </div>
+                <button className="btn btn-ghost" style={{ width: '100%', marginTop: 12 }} onClick={navNudge}>{t(lang, 'seeKarigar')} →</button>
+                <div className="footer-link">
+                  <button onClick={() => { if (confirm('Reset all demo data back to the start?')) { resetDemoData(); window.location.reload(); } }}>Reset demo data</button>
+                </div>
+              </>
+            )}
 
-            <div className="section-head"><h2>{p(lang, 'catTitle')}</h2></div>
-            <div className="cat-grid">
-              {db.categories.map((c, i) => c.active ? (
-                <button key={c.id} className="cat" style={{ background: TINTS[i % TINTS.length] }} onClick={navNudge}>
-                  <span className="ic">{c.icon}</span><b>{lang === 'ur' ? c.ur : lang === 'ro' ? c.ro : c.en}</b>
-                </button>
-              ) : null)}
-            </div>
-            <button className="btn btn-ghost" style={{ width: '100%', marginTop: 12 }} onClick={navNudge}>{t(lang, 'seeKarigar')} →</button>
-            <div className="footer-link">
-              <button onClick={() => { if (confirm('Reset all demo data back to the start?')) { resetDemoData(); window.location.reload(); } }}>Reset demo data</button>
-            </div>
+            {mode === 'signup' && !signupRole && (
+              <>
+                <h1 style={{ textAlign: 'center', marginTop: 20 }}>{lang === 'en' ? 'What do you want to do?' : lang === 'ur' ? 'آپ کیا کرنا چاہتے ہیں؟' : 'Aap kya karna chahte hain?'}</h1>
+                <div className="role-grid">
+                  <button className="role-card big" onClick={() => { setSignupRole('seeker'); closeCodes(); }}>
+                    <span className="icon">🏠</span>
+                    <b>{lang === 'en' ? 'I need work done' : 'Mujhe kaam karwana hai'}</b>
+                    <small>{lang === 'en' ? 'Post a job — karigars send bids. FREE' : 'Job post karein — karigar bids bhejenge. FREE'}</small>
+                  </button>
+                  <button className="role-card big" onClick={() => { setSignupRole('provider'); closeCodes(); }}>
+                    <span className="icon">🧰</span>
+                    <b>{lang === 'en' ? 'I am a karigar — I need work' : 'Main karigar hoon — kaam chahiye'}</b>
+                    <small>{lang === 'en' ? 'Make a profile, send bids, earn' : 'Profile banayein, bids bhejein, kamayein'}</small>
+                  </button>
+                </div>
+                <div className="footer-link">
+                  <button onClick={() => switchMode('login')}>{lang === 'en' ? 'Already have an account? Log in' : 'Pehle se account hai? Log in karein'}</button>
+                </div>
+              </>
+            )}
+
+            {mode === 'signup' && signupRole && (
+              <div className="card" id="auth-card" style={{ marginTop: 12 }}>
+                <button className="backlink" style={{ paddingTop: 0 }} onClick={() => { setSignupRole(null); closeCodes(); }}>← {p(lang, 'back')}</button>
+                <p style={{ margin: '0 0 4px' }}>
+                  <span className="chip">{signupRole === 'seeker' ? '🏠 ' + (lang === 'en' ? 'Seeker signup' : 'Seeker — kaam karwana hai') : '🧰 ' + (lang === 'en' ? 'Karigar signup' : 'Karigar — kaam chahiye')}</span>
+                </p>
+                <label>Aap ka naam?</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Naam likhein…" />
+                <div style={{ marginTop: 16 }}>{phoneField}</div>
+                {error && <div className="warn">{error}</div>}
+                {!otpOpen && (
+                  <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={startSignup}>{p(lang, 'sendOtp')}</button>
+                )}
+                {codeBlocks}
+              </div>
+            )}
           </>
         )}
 
@@ -303,6 +372,10 @@ export default function LoginPage() {
           />
         )}
 
+        {step === 'selfie' && (
+          <SelfieStep lang={lang} onDone={selfieDone} onBack={selfieBack} />
+        )}
+
         {step === 'profile' && (
           <>
             <button className="backlink" onClick={() => { setObStep(5); setObReturnTo(null); setStep('onboard'); }}>← {p(lang, 'back')}</button>
@@ -315,6 +388,8 @@ export default function LoginPage() {
               onAvail={(v) => obPatch({ avail: v })}
               photos={photos}
               onPhotos={setPhotos}
+              photo={selfie}
+              onRetake={() => { setSelfieReturn('profile'); setStep('selfie'); window.scrollTo({ top: 0 }); }}
             />
             <div className="sticky-action"><button className="btn btn-primary" onClick={finishProviderSignup}>{t(lang, 'goLive')}</button></div>
           </>

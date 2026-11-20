@@ -5,6 +5,19 @@
 export const AVCOLORS = ['#182234', '#68784F', '#9A7B3F', '#8C5A3C'];
 export const avColor = (i) => AVCOLORS[Math.abs(i || 0) % AVCOLORS.length];
 
+// Provider avatar: the verified face-cropped selfie when the provider has one
+// (providers[id].photo, a small data URL), otherwise the initial-letter disc.
+// Seeded demo providers have no photo, so they keep the letter avatar.
+export function ProviderAvatar({ photo, name, size = 56, bg }) {
+  const s = { width: size, height: size, flexBasis: size };
+  if (photo) return <img className="avatar-img" src={photo} alt={name || 'Provider'} width={size} height={size} style={s} />;
+  return (
+    <span className="avatar" style={{ ...s, fontSize: Math.round(size * 0.43), background: bg || 'var(--teal)' }}>
+      {(name || 'P').charAt(0)}
+    </span>
+  );
+}
+
 export function stars(r) {
   const f = Math.round(r || 0);
   let s = '';

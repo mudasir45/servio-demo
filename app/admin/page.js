@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import AppHeader, { useGuard } from '../../components/AppHeader';
 import { useServio, transact, uid, notify, logActivity, clearSession, userName, catName, stripPhone, resetDemoData } from '../../lib/store';
 import { COIN_PKR } from '../../lib/seed';
+import { ProviderAvatar } from '../../components/ui';
 
 const SECTIONS = [
   ['dash', '📊 Dashboard'], ['topups', '🪙 Top-ups'], ['refunds', '↩️ Refunds'], ['jobs', '📋 Jobs'],
@@ -20,6 +21,7 @@ export default function AdminPage() {
 
   const pendingTopups = db ? db.topups.filter((x) => x.status === 'pending').length : 0;
   const pendingRefunds = db ? db.refunds.filter((x) => x.status === 'pending').length : 0;
+  const pendingRequests = db ? (db.revealRequests || []).filter((x) => x.status === 'pending').length : 0;
   const heldBids = db ? db.bids.filter((b) => b.status === 'held') : [];
 
   const metrics = useMemo(() => {
@@ -103,7 +105,7 @@ export default function AdminPage() {
               <Metric label="Providers who paid" value={metrics.paidProviders} target={TARGETS.paidProviders} />
               <Metric label="Refund rate" value={metrics.refundRate} target={10} suffix="%" />
             </div>
-            <div className="card"><b>Pending work:</b> {pendingTopups} top-up(s), {pendingRefunds} refund claim(s), {heldBids.length} held bid(s) to check.</div>
+            <div className="card"><b>Pending work:</b> {pendingTopups} top-up(s), {pendingRefunds} refund claim(s), {heldBids.length} held bid(s) to check, {pendingRequests} number request(s) waiting on providers.</div>
             <h3>Recent activity (live)</h3>
             {db.activity.length === 0 && <p className="muted">No activity yet.</p>}
             {db.activity.slice(0, 20).map((a) => (<div key={a.id} className="card" style={{ padding: '10px 16px', margin: '8px 0' }}>{a.text}<div className="small muted">{new Date(a.at).toLocaleString()}</div></div>))}
@@ -141,7 +143,7 @@ export default function AdminPage() {
 
         {sec === 'users' && (
           <div className="table-wrap"><table><thead><tr><th>Name</th><th>Phone</th><th>Role</th><th>Coins</th><th>Status</th><th>Action</th></tr></thead><tbody>
-            {db.users.map((u) => (<tr key={u.id}><td>{u.name}</td><td dir="ltr">{u.phone}</td><td>{u.role}</td><td>{db.wallets[u.id] ? db.wallets[u.id].balance : '—'}</td><td><span className={`chip ${u.status === 'active' ? 'chip-green' : 'chip-red'}`}>{u.status}</span></td>
+            {db.users.map((u) => (<tr key={u.id}><td><span style={{ display: 'flex', gap: 8, alignItems: 'center' }}><ProviderAvatar photo={(db.providers[u.id] || {}).photo} name={u.name} size={32} />{u.name}</span></td><td dir="ltr">{u.phone}</td><td>{u.role}</td><td>{db.wallets[u.id] ? db.wallets[u.id].balance : '—'}</td><td><span className={`chip ${u.status === 'active' ? 'chip-green' : 'chip-red'}`}>{u.status}</span></td>
               <td>{u.role !== 'admin' && (<button className="btn btn-ghost btn-sm" onClick={() => transact((d) => { const x = d.users.find((y) => y.id === u.id); x.status = x.status === 'active' ? 'suspended' : 'active'; logActivity(d, `User ${x.status} — ${x.name}`); notify(d, u.id, x.status === 'active' ? 'Your account is active again.' : 'Your account has been suspended by Servio.'); })}>{u.status === 'active' ? 'Suspend' : 'Activate'}</button>)}</td></tr>))}
           </tbody></table></div>
         )}

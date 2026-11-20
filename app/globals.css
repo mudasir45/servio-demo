@@ -240,6 +240,13 @@ label{font-weight:700;font-size:15px;display:block;margin:16px 0 6px}
 .otp-row{display:flex;gap:8px;justify-content:center;margin:16px 0}
 .otp-row input{width:56px;height:60px;text-align:center;font-size:24px;font-weight:800;padding:0;min-height:60px}
 .role-card.selected{border-color:var(--teal);background:var(--leaf-bg)}
+.role-card.big{min-height:156px;padding:26px 12px}
+.role-card small{display:block;color:var(--muted);font-weight:600;font-size:14px;margin-top:5px;line-height:1.35}
+
+/* ——— Verified selfie photo (face-cropped data URL) ——— */
+.avatar-img{border-radius:50%;object-fit:cover;display:block;background:var(--leaf-bg)}
+.selfie-preview{width:180px;height:180px;border-radius:50%;object-fit:cover;display:block;margin:0 auto;border:3px solid var(--brass);background:var(--leaf-bg)}
+.selfie-frame{width:180px;height:180px;border-radius:50%;border:2.5px dashed #D6CDB6;background:var(--surface);display:grid;place-items:center;font-size:64px;margin:18px auto 4px}
 
 /* ——— Admin (dashboard layout kept; restyled with prototype tokens) ——— */
 .admin-shell{display:flex;min-height:100vh}

@@ -52,9 +52,19 @@ export function obAnswerText(profile, key, lang, categories) {
 // backlink, progress dots + "n / 6", big emoji, serif question, body,
 // big brass mic (press-and-hold) with caption, white answer box,
 // midnight "Aage →" sticky button, "Skip ⏭" link.
+// A provider can offer at most 3 services (work categories) — enforced here in
+// the onboarding tiles, and again in the profile re-record/edit (same ObStep).
+export const MAX_SERVICES = 3;
+export const MAX_SERVICES_MSG = {
+  ur: 'زیادہ سے زیادہ 3 کام چن سکتے ہیں',
+  ro: 'Zyada se zyada 3 kaam chun sakte hain',
+  en: 'You can choose at most 3 services',
+};
+
 export function ObStep({ step, profile, onChange, lang, categories, areas, onBack, onNext, onSkip, returnTo }) {
   const q = OBQ[step];
   const [holding, setHolding] = useState(false);
+  const [limitMsg, setLimitMsg] = useState('');
   const question = lang === 'ur' ? q.q.ur : lang === 'en' ? q.q.en : q.q.roman;
   const answer = obAnswerText(profile, q.key, lang, categories);
 
@@ -62,7 +72,11 @@ export function ObStep({ step, profile, onChange, lang, categories, areas, onBac
     if (q.key === 'name') onChange({ name: q.sample });
     else if (q.key === 'work') {
       const c = categories.find((x) => x.en === q.sample);
-      if (c && !profile.work.includes(c.id)) onChange({ work: [...profile.work, c.id] });
+      if (c && !profile.work.includes(c.id)) {
+        if (profile.work.length >= MAX_SERVICES) { setLimitMsg(MAX_SERVICES_MSG[lang] || MAX_SERVICES_MSG.ro); return; }
+        setLimitMsg('');
+        onChange({ work: [...profile.work, c.id] });
+      }
     } else if (q.key === 'areas') {
       if (areas.includes(q.sample) && !profile.areas.includes(q.sample)) onChange({ areas: [...profile.areas, q.sample] });
     } else if (q.key === 'exp') onChange({ exp: q.sample });
@@ -72,7 +86,16 @@ export function ObStep({ step, profile, onChange, lang, categories, areas, onBac
   const pressStart = (e) => { e.preventDefault(); if (!holding) setHolding(true); };
   const pressEnd = () => { if (!holding) return; setHolding(false); applySample(); };
 
-  const toggleList = (key, val) => onChange({ [key]: profile[key].includes(val) ? profile[key].filter((x) => x !== val) : [...profile[key], val] });
+  const toggleList = (key, val) => {
+    const has = profile[key].includes(val);
+    // Max 3 services: tapping a 4th work tile shows the limit and does not select.
+    if (key === 'work' && !has && profile[key].length >= MAX_SERVICES) {
+      setLimitMsg(MAX_SERVICES_MSG[lang] || MAX_SERVICES_MSG.ro);
+      return;
+    }
+    setLimitMsg('');
+    onChange({ [key]: has ? profile[key].filter((x) => x !== val) : [...profile[key], val] });
+  };
 
   return (
     <>
@@ -88,13 +111,17 @@ export function ObStep({ step, profile, onChange, lang, categories, areas, onBac
           <input placeholder={q.ph} value={profile.name} onChange={(e) => onChange({ name: e.target.value })} aria-label="Naam" />
         )}
         {q.type === 'cats' && (
-          <div className="cat-grid">
-            {categories.map((c, i) => (
-              <button key={c.id} className={`cat ${profile.work.includes(c.id) ? 'sel' : ''}`} style={{ background: TINTS[i % TINTS.length] }} onClick={() => toggleList('work', c.id)}>
-                <span className="ic">{c.icon}</span><b>{catLabel(c, lang)}</b>
-              </button>
-            ))}
-          </div>
+          <>
+            <p className="hold-hint" style={{ margin: '0 0 10px' }}>{(profile.work || []).length} / {MAX_SERVICES} {lang === 'en' ? 'services' : 'kaam'}</p>
+            <div className="cat-grid">
+              {categories.map((c, i) => (
+                <button key={c.id} className={`cat ${profile.work.includes(c.id) ? 'sel' : ''}`} style={{ background: TINTS[i % TINTS.length] }} onClick={() => toggleList('work', c.id)}>
+                  <span className="ic">{c.icon}</span><b>{catLabel(c, lang)}</b>
+                </button>
+              ))}
+            </div>
+            {limitMsg && <div className="warn" role="alert">{limitMsg}</div>}
+          </>
         )}
         {q.type === 'areas' && (
           <div className="pill-row" style={{ justifyContent: 'center' }}>
@@ -147,7 +174,7 @@ export const PHOTO_ICONS = ['🔧', '🪛', '🚿', '💡', '❄️', '🪚', '�
 
 // The prototype's AI profile card: field rows with a round brass mic button
 // per row (re-record), the Available switch row, and the work-photos card.
-export function ProfileCard({ profile, lang, categories, onRerecord, onAvail, photos, onPhotos }) {
+export function ProfileCard({ profile, lang, categories, onRerecord, onAvail, photos, onPhotos, photo, onRetake }) {
   const workTxt = (profile.work || []).map((id) => { const c = (categories || []).find((x) => x.id === id); return c ? c.icon + ' ' + catLabel(c, lang) : id; }).join(' • ');
   const row = (icon, label, value, key) => (
     <div className="field-row" key={key}>
@@ -159,6 +186,18 @@ export function ProfileCard({ profile, lang, categories, onRerecord, onAvail, ph
   return (
     <>
       <div className="card">
+        {(photo || onRetake) && (
+          <div className="field-row">
+            {photo
+              ? <img className="avatar-img" src={photo} alt="Selfie" width={48} height={48} style={{ width: 48, height: 48, flexBasis: 48 }} />
+              : <span className="fi">📷</span>}
+            <div className="fv">
+              <small>{lang === 'en' ? 'Selfie' : 'Selfie'}</small>
+              <b>{photo ? (lang === 'en' ? '✓ Face verified' : '✓ Chehra verify ho gaya') : (lang === 'en' ? 'Not taken yet' : 'Abhi selfie nahi li')}</b>
+            </div>
+            {onRetake && <button className="mic-mini" onClick={onRetake} aria-label="Selfie dobara lein">📷</button>}
+          </div>
+        )}
         {row('👤', lang === 'en' ? 'Name' : 'Naam', profile.name, 'name')}
         {row('🧰', lang === 'en' ? 'Work' : 'Kaam', workTxt, 'work')}
         {row('📍', lang === 'en' ? 'Areas' : 'Ilaka', (profile.areas || []).join(' • '), 'areas')}
