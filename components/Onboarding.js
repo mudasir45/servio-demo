@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { TINTS } from '../lib/seed';
+import { TINTS, toggleService } from '../lib/seed';
 import { t, p } from '../lib/i18n';
 
 // The prototype's 6-step voice onboarding (OBQ), copied verbatim — questions,
@@ -87,13 +87,16 @@ export function ObStep({ step, profile, onChange, lang, categories, areas, onBac
   const pressEnd = () => { if (!holding) return; setHolding(false); applySample(); };
 
   const toggleList = (key, val) => {
-    const has = profile[key].includes(val);
-    // Max 3 services: tapping a 4th work tile shows the limit and does not select.
-    if (key === 'work' && !has && profile[key].length >= MAX_SERVICES) {
-      setLimitMsg(MAX_SERVICES_MSG[lang] || MAX_SERVICES_MSG.ro);
+    // Max 3 services: the shared toggleService refuses a 4th pick; the chat
+    // onboarding enforces the same rule through the same helper.
+    if (key === 'work') {
+      const r = toggleService(profile.work, val, MAX_SERVICES);
+      if (r.limited) { setLimitMsg(MAX_SERVICES_MSG[lang] || MAX_SERVICES_MSG.ro); return; }
+      setLimitMsg('');
+      onChange({ work: r.selected });
       return;
     }
-    setLimitMsg('');
+    const has = profile[key].includes(val);
     onChange({ [key]: has ? profile[key].filter((x) => x !== val) : [...profile[key], val] });
   };
 

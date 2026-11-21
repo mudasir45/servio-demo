@@ -5,8 +5,8 @@ import AppHeader, { useGuard, useLang } from '../../components/AppHeader';
 import BottomNav from '../../components/BottomNav';
 import { ListenBtn, Celebrate, ScreeningModal, priceText, priceTypeLabel, stars, avColor, ProviderAvatar } from '../../components/ui';
 import { PHOTO_ICONS } from '../../components/Onboarding';
-import { useServio, transact, uid, notify, notifyAdmins, logActivity, findPhone, stripPhone, requestReveal, userName, catName, clearSession } from '../../lib/store';
-import { TINTS } from '../../lib/seed';
+import { useServio, transact, uid, notify, notifyAdmins, logActivity, findPhone, stripPhone, requestReveal, providersForCategory, userName, catName, clearSession } from '../../lib/store';
+import CategoryPicker from '../../components/CategoryPicker';
 import { t, p } from '../../lib/i18n';
 
 // The prototype's three voice samples, verbatim (category names mapped to store ids).
@@ -44,6 +44,9 @@ export default function SeekerPage() {
   const aiTimer = useRef(null);
   // Bids / reveal
   const [bidsJobId, setBidsJobId] = useState(null);
+  // Karigar tab is service-first: null = pick a service, otherwise the
+  // chosen category id whose providers are listed.
+  const [karigarCat, setKarigarCat] = useState(null);
   const [providerId, setProviderId] = useState(null);
   const [playingId, setPlayingId] = useState(null);
   const playTimer = useRef(null);
@@ -71,6 +74,8 @@ export default function SeekerPage() {
   if (!session || !db) return <main className="page"><p className="muted">Loading…</p></main>;
 
   const providerUsers = db.users.filter((u) => u.role === 'provider' && db.providers[u.id] && u.status === 'active');
+  const karigarCounts = {};
+  providerUsers.forEach((u) => (db.providers[u.id].categories || []).forEach((cid) => { karigarCounts[cid] = (karigarCounts[cid] || 0) + 1; }));
   const avIndex = (pid) => Math.max(0, providerUsers.findIndex((u) => u.id === pid));
   const revealedFor = (pid) => db.reveals.find((r) => r.seekerId === me && r.providerId === pid && !r.refunded);
   const jobTitle = (j) => { const f = (j.description || '').split('.')[0]; return f.length > 52 ? f.slice(0, 52) + '…' : f; };
@@ -302,13 +307,13 @@ export default function SeekerPage() {
             {hirePrompt}
             {pwaCard}
             <div className="section-head"><h2>{p(lang, 'catTitle')}</h2></div>
-            <div className="cat-grid">
-              {db.categories.map((c, i) => c.active ? (
-                <button key={c.id} className="cat" style={{ background: TINTS[i % TINTS.length] }} onClick={() => catTap(c.id, i)}>
-                  <span className="ic">{c.icon}</span><b>{lang === 'ur' ? c.ur : lang === 'ro' ? c.ro : c.en}</b>
-                </button>
-              ) : null)}
-            </div>
+            <CategoryPicker
+              categories={db.categories}
+              lang={lang}
+              selectedId={tappedCat}
+              onPick={(c) => catTap(c.id, db.categories.findIndex((x) => x.id === c.id))}
+              onEmptyAction={goPost}
+            />
             <button className="btn btn-ghost" style={{ width: '100%', marginTop: 12 }} onClick={() => setTab('karigar')}>{t(lang, 'seeKarigar')} →</button>
             <div className="footer-link">
               <button onClick={() => setTab('alerts')}>🔔 {t(lang, 'alerts')}{unread > 0 ? ` (${unread})` : ''}</button>
@@ -523,29 +528,52 @@ export default function SeekerPage() {
           </>
         )}
 
-        {tab === 'karigar' && (
+        {tab === 'karigar' && !karigarCat && (
           <>
             <button className="backlink" onClick={() => setTab('home')}>← {t(lang, 'back')}</button>
             <h1>{t(lang, 'karigarTitle')}</h1>
-            {providerUsers.map((u, i) => {
-              const pr = db.providers[u.id];
-              return (
-                <article key={u.id} className="job">
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <ProviderAvatar photo={pr.photo} name={u.name} bg={avColor(i)} />
-                    <div style={{ flex: 1 }}>
-                      <b style={{ fontSize: 17 }}>{u.name}</b>
-                      <div className="small" style={{ color: 'var(--marigold-d)', fontWeight: 800 }}>{stars(pr.ratingAvg)} {pr.ratingAvg || 'New'} ({pr.ratingCount || 0})</div>
-                      <div className="small muted">🧰 {(pr.categories || []).map((c) => catName(db, c, lang)).join(' • ')} • 📍 {(pr.areas || [])[0] || ''} • {DISTS[i % DISTS.length]}</div>
-                      <div className="small" style={{ fontWeight: 700 }}>PKR {(pr.price || 0).toLocaleString()} se shuru</div>
-                    </div>
-                  </div>
-                  <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => { setProviderId(u.id); setTab('provider'); window.scrollTo({ top: 0 }); }}>Profile Dekhein →</button>
-                </article>
-              );
-            })}
+            <p className="muted" style={{ margin: '0 0 10px' }}>{lang === 'en' ? 'First pick a service — then see only its karigars.' : 'Pehle kaam chunein — phir sirf usi kaam ke karigar dekhein.'}</p>
+            <CategoryPicker
+              categories={db.categories}
+              lang={lang}
+              counts={karigarCounts}
+              onPick={(c) => { setKarigarCat(c.id); window.scrollTo({ top: 0 }); }}
+              onEmptyAction={goPost}
+            />
           </>
         )}
+
+        {tab === 'karigar' && karigarCat && (() => {
+          const list = providersForCategory(db, karigarCat);
+          const cat = catOf(karigarCat);
+          return (
+            <>
+              <button className="backlink" onClick={() => setKarigarCat(null)}>← {t(lang, 'back')}</button>
+              <h1>{cat.icon} {catName(db, karigarCat, lang)}</h1>
+              {list.length === 0 && (
+                <div className="card empty"><div className="ei">🧰</div><p className="muted">{t(lang, 'noProviderForCat')}</p><button className="btn btn-primary" onClick={goPost}>🎙️ {t(lang, 'postJob')}</button></div>
+              )}
+              {list.map((u) => {
+                const pr = db.providers[u.id];
+                const i = avIndex(u.id);
+                return (
+                  <article key={u.id} className="job">
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                      <ProviderAvatar photo={pr.photo} name={u.name} bg={avColor(i)} />
+                      <div style={{ flex: 1 }}>
+                        <b style={{ fontSize: 17 }}>{u.name}</b>
+                        <div className="small" style={{ color: 'var(--marigold-d)', fontWeight: 800 }}>{stars(pr.ratingAvg)} {pr.ratingAvg || 'New'} ({pr.ratingCount || 0})</div>
+                        <div className="small muted">🧰 {(pr.categories || []).map((c) => catName(db, c, lang)).join(' • ')} • 📍 {(pr.areas || [])[0] || ''} • {DISTS[i % DISTS.length]}</div>
+                        <div className="small" style={{ fontWeight: 700 }}>PKR {(pr.price || 0).toLocaleString()} se shuru{pr.availability ? '' : ' • Busy'}</div>
+                      </div>
+                    </div>
+                    <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => { setProviderId(u.id); setTab('provider'); window.scrollTo({ top: 0 }); }}>Profile Dekhein →</button>
+                  </article>
+                );
+              })}
+            </>
+          );
+        })()}
 
         {tab === 'provider' && detailProvider && (
           <>

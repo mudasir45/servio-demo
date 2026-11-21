@@ -7,6 +7,7 @@ import { t, p, setLang } from '../../lib/i18n';
 import { useLang } from '../../components/AppHeader';
 import BottomNav from '../../components/BottomNav';
 import { ObStep, ProfileCard, OBQ, expToYears, chargesToPrice } from '../../components/Onboarding';
+import ChatOnboarding from '../../components/ChatOnboarding';
 import SelfieStep from '../../components/SelfieStep';
 import { Celebrate } from '../../components/ui';
 
@@ -131,10 +132,11 @@ export default function LoginPage() {
         { toast: `New seeker: ${user.name}`, toastFor: adminIds });
       goHome(user); return;
     }
-    // Provider: 6-step voice onboarding, then the selfie gate, then profile card.
+    // Provider: WhatsApp-style chat onboarding (6 questions), then the
+    // selfie gate inside the chat, then the AI profile card.
     setObProfile({ name: name.trim(), work: [], areas: [], exp: '', charges: '', avail: true });
     setObStep(0); setObReturnTo(null); setPhotos(0); setSelfie(null); setSelfieReturn(null);
-    setStep('onboard');
+    setStep('chat');
     window.scrollTo({ top: 0 });
   };
 
@@ -147,8 +149,8 @@ export default function LoginPage() {
   // Profile-card confirm: creates the provider in the shared store with
   // 40 starter coins and the verified face photo, then celebrate.
   const finishProviderSignup = () => {
-    if (!obProfile.name.trim()) { setToast('Pehle naam aur kaam bolo 🎙️'); setObStep(0); setObReturnTo(null); setStep('onboard'); return; }
-    if (!obProfile.work.length) { setToast('Pehle naam aur kaam bolo 🎙️'); setObStep(1); setObReturnTo(null); setStep('onboard'); return; }
+    if (!obProfile.name.trim()) { setToast('Pehle naam aur kaam bolo 🎙️'); setStep('chat'); return; }
+    if (!obProfile.work.length) { setToast('Pehle naam aur kaam bolo 🎙️'); setStep('chat'); return; }
     if (!selfie) { setToast('Pehle selfie verify karein 📷'); setSelfieReturn('profile'); setStep('selfie'); return; }
     const user = { id: 'u-' + uid(), name: obProfile.name.trim(), phone: phone.trim(), role: 'provider', status: 'active' };
     transact((d) => {
@@ -207,7 +209,7 @@ export default function LoginPage() {
     { key: 'karigar', icon: '🧰', label: t(lang, 'navKarigar') },
   ];
   const navNudge = () => { setToast('Pehle login / signup karein'); document.getElementById('auth-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
-  const inOnboarding = step === 'onboard' || step === 'selfie' || step === 'profile' || step === 'celebrate';
+  const inOnboarding = step === 'chat' || step === 'onboard' || step === 'selfie' || step === 'profile' || step === 'celebrate';
 
   const codeBlocks = (
     <>
@@ -357,6 +359,20 @@ export default function LoginPage() {
           </>
         )}
 
+        {step === 'chat' && (
+          <ChatOnboarding
+            lang={lang}
+            categories={db.categories.filter((c) => c.active)}
+            areas={db.areas.filter((a) => a.active).map((a) => a.name)}
+            profile={obProfile}
+            onChange={obPatch}
+            photo={selfie}
+            onSelfie={(url) => setSelfie(url)}
+            onShowProfile={() => { setStep('profile'); window.scrollTo({ top: 0 }); }}
+            onBack={() => setStep('form')}
+          />
+        )}
+
         {step === 'onboard' && (
           <ObStep
             step={obStep}
@@ -378,7 +394,7 @@ export default function LoginPage() {
 
         {step === 'profile' && (
           <>
-            <button className="backlink" onClick={() => { setObStep(5); setObReturnTo(null); setStep('onboard'); }}>← {p(lang, 'back')}</button>
+            <button className="backlink" onClick={() => setStep('chat')}>← {p(lang, 'back')}</button>
             <h1>{t(lang, 'myProfile')}</h1>
             <ProfileCard
               profile={obProfile}

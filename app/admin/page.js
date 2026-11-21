@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppHeader, { useGuard } from '../../components/AppHeader';
 import { useServio, transact, uid, notify, logActivity, clearSession, userName, catName, stripPhone, resetDemoData } from '../../lib/store';
-import { COIN_PKR } from '../../lib/seed';
+import { COIN_PKR, groupLabel } from '../../lib/seed';
 import { ProviderAvatar } from '../../components/ui';
 
 const SECTIONS = [
@@ -151,7 +151,7 @@ export default function AdminPage() {
         {sec === 'cats' && (
           <>
             <h3>Categories</h3>
-            {db.categories.map((c) => (<div key={c.id} className="field-row" style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: '10px 16px', margin: '8px 0' }}><span className="fi">{c.icon}</span><div className="fv"><b>{c.en}</b><small>{c.ro} · {c.ur}</small></div><label className="switch"><input type="checkbox" checked={c.active} onChange={() => transact((d) => { const x = d.categories.find((y) => y.id === c.id); x.active = !x.active; logActivity(d, `Category ${x.active ? 'enabled' : 'disabled'} — ${x.en}`); })} /><span className="track"></span></label></div>))}
+            {db.categories.map((c) => (<div key={c.id} className="field-row" style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: '10px 16px', margin: '8px 0' }}><span className="fi">{c.icon}</span><div className="fv"><b>{c.en}</b><small>{c.ro} · {c.ur} · Group: {groupLabel(c.group, 'en')}</small></div><label className="switch"><input type="checkbox" checked={c.active} onChange={() => transact((d) => { const x = d.categories.find((y) => y.id === c.id); x.active = !x.active; logActivity(d, `Category ${x.active ? 'enabled' : 'disabled'} — ${x.en}`); })} /><span className="track"></span></label></div>))}
             <h3>Areas</h3>
             {db.areas.map((a) => (<div key={a.name} className="field-row" style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: '10px 16px', margin: '8px 0' }}><span className="fi">📍</span><div className="fv"><b>{a.name}</b><small>{a.active ? 'ON' : 'OFF'}</small></div><label className="switch"><input type="checkbox" checked={a.active} onChange={() => transact((d) => { const x = d.areas.find((y) => y.name === a.name); x.active = !x.active; logActivity(d, `Area ${x.active ? 'enabled' : 'disabled'} — ${x.name}`); })} /><span className="track"></span></label></div>))}
           </>
