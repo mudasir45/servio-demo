@@ -319,3 +319,73 @@ th{background:#F1E8D2;color:var(--ink);font-weight:800}
 .chat-inputbar input:focus{outline:none}
 .chat-round{width:48px;height:48px;flex:0 0 48px;border-radius:50%;border:0;background:var(--marigold);color:#182234;font-size:21px;display:grid;place-items:center}
 .chat-round.send{background:var(--teal);color:#fff}
+
+/* ————————————————————————————————————————————————————————————————
+   Desktop-only elements (sidebar brand, login brand panel).
+   Hidden in the mobile layout; shown by the ≥1024px rules below. */
+.nav-brand{display:none}
+.login-brand{display:none}
+
+/* ————————————————————————————————————————————————————————————————
+   DESKTOP LAYOUT (≥1024px)
+   Everything in this section is additive: no mobile rule above is
+   changed. Seeker/provider pages carry .app-shell on their root div;
+   the login page carries .login-shell. Inside .app-shell the floating
+   .bottomnav becomes a fixed left sidebar, .page widens to 1180px,
+   lists go two-per-row and single-column flows cap at ~760px. */
+@media(min-width:1024px){
+  /* — App shell: content offset by the sidebar — */
+  .app-shell{padding-left:250px}
+  .app-shell .page{max-width:1180px;padding:28px 36px 48px}
+  .app-shell .topbar-in{max-width:1180px;padding:10px 36px;justify-content:flex-end}
+  .app-shell .topbar .logo{display:none}
+  .app-shell .sticky-action{bottom:24px}
+  .app-shell .toast-wrap{left:calc(50% + 125px)}
+  .app-shell .modal{padding:12px 12px 12px 262px}
+
+  /* — BottomNav → fixed left sidebar (same buttons/handlers/badges) — */
+  .app-shell .bottomnav{left:0;top:0;bottom:0;transform:none;width:250px;border:0;border-right:1px solid var(--teal2);border-radius:0;background:var(--teal);color:#fff;display:flex;flex-direction:column;align-items:stretch;padding:22px 14px;gap:6px;box-shadow:none}
+  .app-shell .nav-brand{display:block;margin:2px 6px 20px}
+  .app-shell .bottomnav button{display:flex;align-items:center;gap:12px;text-align:start;color:#CFC8B4;font-size:15px;min-height:52px;padding:10px 14px;border-radius:12px;width:100%}
+  .app-shell .bottomnav button span{display:inline;font-size:20px;line-height:1}
+  .app-shell .bottomnav button.active{background:var(--teal2);color:#fff;box-shadow:inset 3px 0 0 var(--brass)}
+  .app-shell[dir="rtl"] .bottomnav button.active{box-shadow:inset -3px 0 0 var(--brass)}
+  .app-shell .bottomnav .center{margin-top:12px;justify-content:center;font-size:16px;min-height:56px;color:#182234}
+  .app-shell .bottomnav .center.active{outline:none;box-shadow:inset 0 0 0 2.5px var(--teal)}
+  .app-shell .bottomnav .nb-badge{position:static;margin-inline-start:auto;font-size:10px}
+
+  /* — Content grids & flow widths — */
+  .app-shell .cat-grid,.app-shell .tile-grid{grid-template-columns:repeat(4,1fr)}
+  .card-list{display:grid;grid-template-columns:repeat(2,1fr);gap:0 16px;align-items:start}
+  .flow-col{max-width:760px}
+  .profile-col{max-width:860px}
+  .app-shell .hire-card,.app-shell .pwa-card{max-width:760px}
+  .wallet-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:8px 28px;align-items:start}
+  .app-shell .wallet-side>h2{margin-top:0!important}
+
+  /* — Login: split layout (brand panel + centred form column) — */
+  .login-shell{display:grid;grid-template-columns:minmax(380px,45%) 1fr;grid-template-rows:auto 1fr;align-items:start}
+  .login-brand{display:flex;flex-direction:column;grid-row:1/-1;position:sticky;top:0;height:100vh;background:var(--teal);color:#fff;padding:56px 48px}
+  .login-brand .logo-mark{width:56px;height:56px;font-size:28px;border-radius:16px}
+  .login-brand .logo b{font-size:34px}
+  .login-tagline{font-family:var(--serif);font-size:30px;line-height:1.2;margin:38px 0 0}
+  .login-feats{list-style:none;margin:30px 0 0;padding:0;display:flex;flex-direction:column;gap:22px}
+  .login-feats li{display:flex;gap:14px;align-items:flex-start}
+  .login-feats .fi{font-size:26px;width:48px;height:48px;flex:0 0 48px;display:grid;place-items:center;background:var(--teal2);border-radius:14px}
+  .login-feats b{display:block;font-size:17px}
+  .login-feats small{color:#D9D2BF;font-size:14px;line-height:1.4;display:block;margin-top:2px}
+  .login-shell .page{max-width:880px;padding:32px 36px 48px}
+  .login-shell .topbar-in{max-width:880px;padding:10px 36px}
+  .login-shell #auth-card{max-width:460px;margin-left:auto;margin-right:auto}
+  .login-shell .role-grid{max-width:680px;margin-left:auto;margin-right:auto}
+  .login-shell .bottomnav{display:none}
+  .chat-col{max-width:780px;margin:0 auto}
+  .chat-col .chat-controls{bottom:20px}
+
+  /* — Admin: cap the dashboard content — */
+  .admin-main{max-width:1400px;margin:0 auto}
+}
+
+@media(min-width:1280px){
+  .app-shell .cat-grid,.app-shell .tile-grid{grid-template-columns:repeat(5,1fr)}
+}

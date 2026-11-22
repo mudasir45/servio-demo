@@ -5,6 +5,10 @@
 export default function BottomNav({ items, active, onGo }) {
   return (
     <nav className="bottomnav" aria-label="Main">
+      {/* Desktop only: sidebar brand block (hidden on mobile via .nav-brand). */}
+      <div className="nav-brand" aria-hidden="true">
+        <div className="logo"><div className="logo-mark">S</div><b>Servio</b></div>
+      </div>
       {items.map((it) => (
         <button
           key={it.key}

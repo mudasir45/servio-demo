@@ -277,7 +277,7 @@ export default function ProviderPage() {
   const fakeBid = { priceType: bidForm.priceType, price: Number(bidForm.price) || 0, priceTo: Number(bidForm.priceTo) || 0, visitCharge: bidForm.visitCharge };
 
   return (
-    <div dir={lang === 'ur' ? 'rtl' : 'ltr'}>
+    <div dir={lang === 'ur' ? 'rtl' : 'ltr'} className="app-shell">
       <AppHeader role="provider" />
       {toast && <div className="toast-wrap" aria-live="polite"><div className="toast">{toast}</div></div>}
       <main className="page">
@@ -328,7 +328,7 @@ export default function ProviderPage() {
                 <div className="section-head" style={{ marginTop: 0 }}>
                   <h2 style={{ margin: 0, fontSize: 22 }}>{t(lang, 'reqTitle')} <span className="chip">{pendingRequests.length}</span></h2>
                 </div>
-                {pendingRequests.map((r) => {
+                <div className="card-list">{pendingRequests.map((r) => {
                   const seeker = db.users.find((u) => u.id === r.seekerId);
                   const job = r.jobId ? db.jobs.find((j) => j.id === r.jobId) : null;
                   return (
@@ -352,7 +352,7 @@ export default function ProviderPage() {
                       </div>
                     </article>
                   );
-                })}
+                })}</div>
               </div>
             )}
             <div className="section-head" style={{ marginTop: 0 }}>
@@ -366,7 +366,7 @@ export default function ProviderPage() {
             {feed.length === 0 && (
               <div className="card empty"><div className="ei">📭</div><p className="muted">Abhi koi job nahi</p></div>
             )}
-            {feed.map((j) => {
+            <div className="card-list">{feed.map((j) => {
               const m = jobMeta(j); const cat = catOf(j);
               const rec = revealFor(j);
               const seeker = db.users.find((u) => u.id === j.seekerId);
@@ -417,12 +417,12 @@ export default function ProviderPage() {
                   )}
                 </article>
               );
-            })}
+            })}</div>
           </>
         )}
 
         {tab === 'bid' && bidJob && (
-          <>
+          <div className="flow-col">
             <button className="backlink" onClick={() => setTab('jobs')}>← {t(lang, 'back')}</button>
             <h1>💬 {lang === 'en' ? 'Send a bid' : lang === 'ur' ? 'بِڈ بھیجیں' : 'Bid bhejein'} <span className="tag gold">{t(lang, 'free')}</span></h1>
             <div className="card" style={{ marginBottom: 16 }}>
@@ -477,13 +477,15 @@ export default function ProviderPage() {
             <div className="sticky-action">
               <button className="btn btn-amber" onClick={sendBid}>{myBidFor(bidJob.id) ? t(lang, 'updateBid') : t(lang, 'sendBid')}</button>
             </div>
-          </>
+          </div>
         )}
 
         {tab === 'wallet' && (
           <>
             <button className="backlink" onClick={() => setTab('home')}>← {t(lang, 'back')}</button>
             <h1>{t(lang, 'walletTitle')}</h1>
+            <div className="wallet-grid">
+            <div className="wallet-main">
             <div className="balance-card">
               <div className="num">{wallet.balance} <small style={{ fontSize: 20 }}>{t(lang, 'coins')}</small></div>
               <div style={{ color: '#D9D2BF', fontWeight: 700 }}>= PKR {(wallet.balance * COIN_PKR).toLocaleString()}</div>
@@ -498,6 +500,8 @@ export default function ProviderPage() {
                 </button>
               ))}
             </div>
+            </div>
+            <div className="wallet-side">
             <h2 style={{ margin: '20px 0 8px' }}>{t(lang, 'history')}</h2>
             <div className="card" style={{ padding: '6px 16px' }}>
               {db.topups.filter((x) => x.providerId === me).map((x) => (
@@ -514,11 +518,13 @@ export default function ProviderPage() {
                 <div key={x.id} className="txn"><span>{x.note}<br /><span className="small muted">{new Date(x.at).toLocaleString()}</span></span><b className={x.amount >= 0 ? 'pos' : 'neg'}>{x.amount >= 0 ? '+' : ''}{x.amount} 🪙</b></div>
               ))}
             </div>
+            </div>
+            </div>
           </>
         )}
 
         {tab === 'profile' && (
-          <>
+          <div className="profile-col">
             <button className="backlink" onClick={() => setTab('home')}>← {t(lang, 'back')}</button>
             <h1>{t(lang, 'myProfile')}</h1>
             <ProfileCard
@@ -534,15 +540,15 @@ export default function ProviderPage() {
             />
             <div className="sticky-action"><button className="btn btn-primary" onClick={() => setToast('✅ Profile pehle se LIVE hai')}>{t(lang, 'goLive')}</button></div>
             <button className="btn btn-ghost" style={{ width: '100%', marginTop: 12 }} onClick={() => setTab('settings')}>{t(lang, 'settings')}</button>
-          </>
+          </div>
         )}
 
         {tab === 'selfie' && (
-          <SelfieStep lang={lang} onDone={saveSelfie} onBack={() => setTab('profile')} />
+          <div className="flow-col"><SelfieStep lang={lang} onDone={saveSelfie} onBack={() => setTab('profile')} /></div>
         )}
 
         {tab === 'edit' && editProfile && (
-          <ObStep
+          <div className="flow-col"><ObStep
             step={editStep}
             profile={editProfile}
             onChange={(patch) => setEditProfile((pr) => ({ ...pr, ...patch }))}
@@ -553,11 +559,11 @@ export default function ProviderPage() {
             onNext={saveEdit}
             onSkip={saveEdit}
             returnTo="profile"
-          />
+          /></div>
         )}
 
         {tab === 'settings' && (
-          <>
+          <div className="flow-col">
             <button className="backlink" onClick={() => setTab('profile')}>← {t(lang, 'back')}</button>
             <h1>{t(lang, 'settings')}</h1>
             <div className="card">
@@ -571,7 +577,7 @@ export default function ProviderPage() {
               </div>
             </div>
             <div className="sticky-action"><button className="btn btn-primary" onClick={() => { clearSession(); router.replace('/login'); }}>↩ {t(lang, 'logout')}</button></div>
-          </>
+          </div>
         )}
 
         {tab === 'alerts' && (
@@ -579,19 +585,19 @@ export default function ProviderPage() {
             <button className="backlink" onClick={() => setTab('home')}>← {t(lang, 'back')}</button>
             <h1>🔔 {t(lang, 'alerts')}</h1>
             {db.notifications.filter((n) => n.userId === me).length === 0 && <div className="card empty"><div className="ei">🔔</div><p className="muted">No alerts yet.</p></div>}
-            {db.notifications.filter((n) => n.userId === me).map((n) => (
+            <div className="card-list">{db.notifications.filter((n) => n.userId === me).map((n) => (
               <div key={n.id} className="card" style={{ padding: '12px 16px' }}>{n.text}<div className="small muted">{new Date(n.at).toLocaleString()}</div></div>
-            ))}
+            ))}</div>
           </>
         )}
 
         {tab === 'success' && success && (
-          <Celebrate
+          <div className="flow-col"><Celebrate
             title={success.title}
             sub={success.sub}
             btn1={{ label: success.btn1.label, onClick: () => setTab(success.btn1.tab) }}
             btn2={{ label: '🏠 Home', onClick: () => setTab('home') }}
-          />
+          /></div>
         )}
       </main>
 

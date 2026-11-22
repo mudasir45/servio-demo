@@ -252,7 +252,17 @@ export default function LoginPage() {
   );
 
   return (
-    <div dir={lang === 'ur' ? 'rtl' : 'ltr'}>
+    <div dir={lang === 'ur' ? 'rtl' : 'ltr'} className="login-shell">
+      {/* Desktop only: brand panel (hidden on mobile via .login-brand). */}
+      <aside className="login-brand">
+        <div className="logo"><div className="logo-mark">S</div><b>Servio</b></div>
+        <p className="login-tagline">Bol kar kaam karwao</p>
+        <ul className="login-feats">
+          <li><span className="fi">🎙️</span><div><b>Voice first</b><small>Bol kar job post karein — likhna zaroori nahi</small></div></li>
+          <li><span className="fi">📷</span><div><b>Verified karigar</b><small>Har karigar selfie se verify hota hai</small></div></li>
+          <li><span className="fi">🪙</span><div><b>Coins system</b><small>Number sirf accept par milta hai — 5 coins</small></div></li>
+        </ul>
+      </aside>
       <header className="topbar">
         <div className="topbar-in">
           <div className="logo"><div className="logo-mark">S</div><b>Servio</b></div>
@@ -360,7 +370,7 @@ export default function LoginPage() {
         )}
 
         {step === 'chat' && (
-          <ChatOnboarding
+          <div className="chat-col"><ChatOnboarding
             lang={lang}
             categories={db.categories.filter((c) => c.active)}
             areas={db.areas.filter((a) => a.active).map((a) => a.name)}
@@ -370,7 +380,7 @@ export default function LoginPage() {
             onSelfie={(url) => setSelfie(url)}
             onShowProfile={() => { setStep('profile'); window.scrollTo({ top: 0 }); }}
             onBack={() => setStep('form')}
-          />
+          /></div>
         )}
 
         {step === 'onboard' && (
@@ -393,7 +403,7 @@ export default function LoginPage() {
         )}
 
         {step === 'profile' && (
-          <>
+          <div className="profile-col">
             <button className="backlink" onClick={() => setStep('chat')}>← {p(lang, 'back')}</button>
             <h1>{t(lang, 'myProfile')}</h1>
             <ProfileCard
@@ -408,7 +418,7 @@ export default function LoginPage() {
               onRetake={() => { setSelfieReturn('profile'); setStep('selfie'); window.scrollTo({ top: 0 }); }}
             />
             <div className="sticky-action"><button className="btn btn-primary" onClick={finishProviderSignup}>{t(lang, 'goLive')}</button></div>
-          </>
+          </div>
         )}
 
         {step === 'celebrate' && newUser && (

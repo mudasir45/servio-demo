@@ -291,7 +291,7 @@ export default function SeekerPage() {
   };
 
   return (
-    <div dir={lang === 'ur' ? 'rtl' : 'ltr'}>
+    <div dir={lang === 'ur' ? 'rtl' : 'ltr'} className="app-shell">
       <AppHeader role="seeker" />
       {toast && <div className="toast-wrap" aria-live="polite"><div className="toast">{toast}</div></div>}
       <main className="page">
@@ -323,7 +323,7 @@ export default function SeekerPage() {
         )}
 
         {tab === 'post' && (
-          <>
+          <div className="flow-col">
             <button className="backlink" onClick={() => setTab('home')}>← {t(lang, 'back')}</button>
             <h1>🎙️ {p(lang, 'voiceTitle')}</h1>
             <div className={`voice-panel ${listening ? 'listening' : 'idle'}`}>
@@ -376,11 +376,11 @@ export default function SeekerPage() {
                 <div className="sticky-action"><button className="btn btn-primary" onClick={postJob}>🚀 {p(lang, 'postBtn')}</button></div>
               </div>
             )}
-          </>
+          </div>
         )}
 
         {tab === 'followup' && (
-          <>
+          <div className="flow-col">
             <button className="backlink" onClick={() => setTab('post')}>← {t(lang, 'back')}</button>
             <div className="ob-icon">🤖</div>
             <h1 className="ob-q">{p(lang, 'fuQ')}</h1>
@@ -397,16 +397,16 @@ export default function SeekerPage() {
             >🎙️</button>
             <p className="hold-hint">{t(lang, 'holdHint')}</p>
             <div className={`ob-answer ${fuAnswer ? '' : 'empty'}`}>{fuAnswer || '—'}</div>
-          </>
+          </div>
         )}
 
         {tab === 'success' && success && (
-          <Celebrate
+          <div className="flow-col"><Celebrate
             title={success.title}
             sub={success.sub}
             btn1={{ label: success.btn1.label, onClick: () => setTab(success.btn1.tab) }}
             btn2={{ label: '🏠 Home', onClick: () => setTab('home') }}
-          />
+          /></div>
         )}
 
         {tab === 'jobs' && (
@@ -416,7 +416,7 @@ export default function SeekerPage() {
             {myJobs.length === 0 && (
               <div className="card empty"><div className="ei">📋</div><p className="muted">Abhi koi job post nahi hui</p><button className="btn btn-primary" onClick={goPost}>🎙️ Pehli Job Post Karein</button></div>
             )}
-            {myJobs.map((j) => {
+            <div className="card-list">{myJobs.map((j) => {
               const n = db.bids.filter((b) => b.jobId === j.id && b.status !== 'removed').length;
               return (
                 <article key={j.id} className="job">
@@ -429,7 +429,7 @@ export default function SeekerPage() {
                   </div>
                 </article>
               );
-            })}
+            })}</div>
           </>
         )}
 
@@ -441,7 +441,7 @@ export default function SeekerPage() {
             {jobBids.length === 0 && (
               <div className="card empty"><div className="ei">💬</div><p className="muted">Abhi koi bid nahi aayi</p><button className="btn btn-primary" onClick={() => setTab('jobs')}>← Jobs</button></div>
             )}
-            {jobBids.map((b) => {
+            <div className="card-list">{jobBids.map((b) => {
               const pu = db.users.find((x) => x.id === b.providerId);
               const prof = db.providers[b.providerId] || {};
               const rev = revealedFor(b.providerId);
@@ -490,7 +490,7 @@ export default function SeekerPage() {
                   )}
                 </article>
               );
-            })}
+            })}</div>
           </>
         )}
 
@@ -505,7 +505,7 @@ export default function SeekerPage() {
             </div>
             <h2 style={{ margin: '20px 0 8px' }}>Mere numbers</h2>
             {myReveals.length === 0 && <div className="card empty"><div className="ei">📞</div><p className="muted">Abhi koi number nahi dikhaya gaya</p></div>}
-            {myReveals.map((r) => {
+            <div className="card-list">{myReveals.map((r) => {
               const pu = db.users.find((x) => x.id === r.providerId);
               if (!pu) return null;
               return (
@@ -524,7 +524,7 @@ export default function SeekerPage() {
                   </div>
                 </article>
               );
-            })}
+            })}</div>
           </>
         )}
 
@@ -553,7 +553,7 @@ export default function SeekerPage() {
               {list.length === 0 && (
                 <div className="card empty"><div className="ei">🧰</div><p className="muted">{t(lang, 'noProviderForCat')}</p><button className="btn btn-primary" onClick={goPost}>🎙️ {t(lang, 'postJob')}</button></div>
               )}
-              {list.map((u) => {
+              <div className="card-list">{list.map((u) => {
                 const pr = db.providers[u.id];
                 const i = avIndex(u.id);
                 return (
@@ -570,13 +570,13 @@ export default function SeekerPage() {
                     <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => { setProviderId(u.id); setTab('provider'); window.scrollTo({ top: 0 }); }}>Profile Dekhein →</button>
                   </article>
                 );
-              })}
+              })}</div>
             </>
           );
         })()}
 
         {tab === 'provider' && detailProvider && (
-          <>
+          <div className="flow-col">
             <button className="backlink" onClick={() => setTab('karigar')}>← {t(lang, 'back')}</button>
             <h1>{t(lang, 'profileTitle')}</h1>
             {(() => {
@@ -617,7 +617,7 @@ export default function SeekerPage() {
                 </div>
               );
             })()}
-          </>
+          </div>
         )}
 
         {tab === 'alerts' && (
@@ -625,14 +625,14 @@ export default function SeekerPage() {
             <button className="backlink" onClick={() => setTab('home')}>← {t(lang, 'back')}</button>
             <h1>🔔 {t(lang, 'alerts')}</h1>
             {db.notifications.filter((n) => n.userId === me).length === 0 && <div className="card empty"><div className="ei">🔔</div><p className="muted">No alerts yet.</p></div>}
-            {db.notifications.filter((n) => n.userId === me).map((n) => (
+            <div className="card-list">{db.notifications.filter((n) => n.userId === me).map((n) => (
               <div key={n.id} className="card" style={{ padding: '12px 16px' }}>{n.text}<div className="small muted">{new Date(n.at).toLocaleString()}</div></div>
-            ))}
+            ))}</div>
           </>
         )}
 
         {tab === 'settings' && (
-          <>
+          <div className="flow-col">
             <button className="backlink" onClick={() => setTab('home')}>← {t(lang, 'back')}</button>
             <h1>{t(lang, 'settings')}</h1>
             <div className="card">
@@ -641,7 +641,7 @@ export default function SeekerPage() {
               <div className="field-row"><span className="fi">🌐</span><div className="fv"><small>Language</small><b>Top bar se badlein ↑</b></div></div>
             </div>
             <div className="sticky-action"><button className="btn btn-primary" onClick={() => { clearSession(); router.replace('/login'); }}>↩ {t(lang, 'logout')}</button></div>
-          </>
+          </div>
         )}
       </main>
 
