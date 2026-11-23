@@ -153,8 +153,48 @@ export default function ChatOnboarding({ lang, categories, areas, profile, onCha
   const inChat = phase === 'ask' || phase === 'typing';
   const progressPct = phase === 'selfiePrompt' || phase === 'verified' ? 100 : Math.round(((step + (phase === 'ask' ? 1 : 0)) / 6) * 100);
 
+  // Desktop summary-pane checklist state, derived from the chat's own
+  // step/phase: earlier questions are done, the current one is highlighted.
+  const stepState = (i) => {
+    if (phase === 'verified' || phase === 'selfiePrompt') return 'done';
+    if (i < step) return 'done';
+    if (i === step) return 'current';
+    return 'todo';
+  };
+
   return (
-    <>
+    <div className="chat-shell">
+      {/* Desktop only: onboarding summary pane (WhatsApp Web style). Display
+          only — ticks derive from the chat's step/phase and the answers the
+          parent already holds. Hidden below 1024px via .desktop-only. */}
+      <aside className="chat-side desktop-only">
+        <div className="chat-side-card">
+          <div className="logo"><div className="logo-mark">S</div><b>Servio</b></div>
+          <div className="cs-title">Karigar Onboarding</div>
+          <p className="small muted" style={{ margin: '0 0 6px' }}>{lang === 'en' ? '6 questions — then your profile goes live' : '6 sawal — phir profile live'}</p>
+          {OBQ.map((q, i) => {
+            const st = stepState(i);
+            const ans = st === 'done' ? obAnswerText(profile, q.key, lang, categories) : '';
+            return (
+              <div key={q.key} className={`cs-step ${st}`}>
+                <span className="cs-ic">{st === 'done' ? '✓' : q.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="cs-label">{qText(q, lang)}</div>
+                  {ans
+                    ? <div className="cs-ans">{ans}</div>
+                    : st === 'current' ? <div className="cs-ans">{lang === 'en' ? 'Answering now…' : 'Abhi ye sawal…'}</div> : null}
+                </div>
+              </div>
+            );
+          })}
+          <div className="cs-photo">
+            {photo
+              ? <><img src={photo} alt="Verified selfie" /><div><b>{pick(SELFIE_OK, lang)}</b><div className="small muted">Selfie</div></div></>
+              : <><span className="cs-photo-ph">📷</span><div><b>Selfie</b><div className="small muted">{lang === 'en' ? 'Last step — face verify' : 'Aakhri step — chehra verify'}</div></div></>}
+          </div>
+        </div>
+      </aside>
+      <div className="chat-main">
       <button className="backlink" onClick={onBack}>← {p(lang, 'back')}</button>
       <div className="chat-progress" aria-live="polite">
         {inChat ? `${t(lang, 'sawal')} ${Math.min(step + 1, 6)} / 6` : (lang === 'en' ? 'Last step — Selfie 📷' : 'Aakhri step — Selfie 📷')}
@@ -269,6 +309,7 @@ export default function ChatOnboarding({ lang, categories, areas, profile, onCha
           <p className="hold-hint">{t(lang, 'holdHint')}</p>
         </div>
       )}
-    </>
+      </div>
+    </div>
   );
 }

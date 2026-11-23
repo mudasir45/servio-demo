@@ -262,6 +262,13 @@ export default function LoginPage() {
           <li><span className="fi">📷</span><div><b>Verified karigar</b><small>Har karigar selfie se verify hota hai</small></div></li>
           <li><span className="fi">🪙</span><div><b>Coins system</b><small>Number sirf accept par milta hai — 5 coins</small></div></li>
         </ul>
+        <div className="login-steps">
+          <b className="login-steps-title">Kaise kaam karta hai</b>
+          <div className="phase-line"><span className="n">1</span><div><b>Bolo</b><small>Mic dabao, kaam bolo — job live ho jati hai</small></div></div>
+          <div className="phase-line"><span className="n">2</span><div><b>Bids aati hain</b><small>Karigar apne rate bhejte hain — bilkul FREE</small></div></div>
+          <div className="phase-line"><span className="n">3</span><div><b>Number milta hai</b><small>Karigar request accept kare — seedha baat karein</small></div></div>
+        </div>
+        <p className="login-trust">🔒 Har karigar selfie-verified hai — asli banda, asli kaam.</p>
       </aside>
       <header className="topbar">
         <div className="topbar-in">
@@ -277,7 +284,7 @@ export default function LoginPage() {
         </div>
       </header>
       {toast && <div className="toast-wrap" aria-live="polite"><div className="toast">{toast}</div></div>}
-      <main className="page">
+      <main className={step === 'chat' ? 'page page-chat' : 'page'}>
         {step === 'form' && (
           <>
             <div className="voice-hero">

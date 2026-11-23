@@ -281,6 +281,8 @@ export default function SeekerPage() {
     { key: 'karigar', icon: '🧰', label: t(lang, 'navKarigar') },
   ];
   const navActive = { home: 'home', alerts: 'home', settings: 'home', jobs: 'jobs', bids: 'jobs', followup: 'jobs', success: 'jobs', post: 'voice', wallet: 'wallet', karigar: 'karigar', provider: 'karigar' }[tab] || 'home';
+  // Desktop topbar section title (hidden on mobile) from the same tab state.
+  const pageTitle = { home: t(lang, 'navHome'), post: p(lang, 'voiceTitle'), followup: p(lang, 'voiceTitle'), jobs: t(lang, 'myPosted'), bids: 'Bids', wallet: t(lang, 'navWallet'), karigar: t(lang, 'karigarTitle'), provider: t(lang, 'profileTitle'), alerts: t(lang, 'alerts'), settings: t(lang, 'settings'), success: '' }[tab] || '';
   const navGo = (key) => {
     if (key === 'home') setTab('home');
     else if (key === 'jobs') setTab('jobs');
@@ -292,13 +294,26 @@ export default function SeekerPage() {
 
   return (
     <div dir={lang === 'ur' ? 'rtl' : 'ltr'} className="app-shell">
-      <AppHeader role="seeker" />
+      <AppHeader role="seeker" title={pageTitle} />
       {toast && <div className="toast-wrap" aria-live="polite"><div className="toast">{toast}</div></div>}
       <main className="page">
 
         {tab === 'home' && (
-          <>
-            <div className="voice-hero">
+          <div className="home-grid">
+            <div className="home-main">
+            {/* Desktop only: compact horizontal hero banner (the tall mobile
+                hero below is hidden at ≥1024px). Same goPost action. */}
+            <div className="hero-banner desktop-only">
+              <div className="hb-text">
+                <h2>{lang === 'en' ? <>Say it. <em>Get it done.</em></> : lang === 'ur' ? p(lang, 'heroTitle') : <>Bol kar kaam <em>karwao</em></>}</h2>
+                <p>{p(lang, 'heroSub')}</p>
+              </div>
+              <div className="hb-actions">
+                <button className="hb-mic" aria-label="Bol kar kaam post karein" onClick={goPost}>🎙️</button>
+                <button className="btn btn-amber hb-cta" onClick={goPost}>🎙️ {t(lang, 'postJob')}</button>
+              </div>
+            </div>
+            <div className="voice-hero home-hero">
               <h1>{lang === 'en' ? <>Say it. <em>Get it done.</em></> : lang === 'ur' ? p(lang, 'heroTitle') : <>Bol kar kaam <em>karwao</em></>}</h1>
               <p>{p(lang, 'heroSub')}</p>
               <button className="bigmic" aria-label="Bol kar kaam post karein" onClick={goPost}>🎙️</button>
@@ -319,7 +334,38 @@ export default function SeekerPage() {
               <button onClick={() => setTab('alerts')}>🔔 {t(lang, 'alerts')}{unread > 0 ? ` (${unread})` : ''}</button>
               <button onClick={() => setTab('settings')}>{t(lang, 'settings')}</button>
             </div>
-          </>
+            </div>
+            {/* Desktop only: right rail — display-only summaries of the same
+                store data (my jobs, my notifications), actions route to the
+                existing tabs. Hidden below 1024px. */}
+            <aside className="home-rail desktop-only">
+              <div className="rail-card">
+                <div className="rail-head"><b>📋 {t(lang, 'myPosted')}</b><span className="chip">{myJobs.length}</span></div>
+                {myJobs.length ? (
+                  <>
+                    <p style={{ margin: '2px 0 0', fontWeight: 700 }}>{catOf(myJobs[0].categoryId).icon} {jobTitle(myJobs[0])}</p>
+                    <p className="small muted" style={{ margin: '2px 0 0' }}>📍 {myJobs[0].area} • {myJobs[0].status === 'open' ? '● Live' : myJobs[0].status} • {db.bids.filter((b) => b.jobId === myJobs[0].id && b.status !== 'removed').length} bids</p>
+                  </>
+                ) : <p className="small muted" style={{ margin: '2px 0 0' }}>{lang === 'en' ? 'No jobs posted yet' : 'Abhi koi job post nahi hui'}</p>}
+                <button className="btn btn-ghost rail-btn" onClick={() => setTab('jobs')}>{t(lang, 'myPosted')} →</button>
+              </div>
+              <div className="rail-card">
+                <div className="rail-head"><b>🔔 {t(lang, 'alerts')}</b>{unread > 0 && <span className="chip chip-red">{unread} {lang === 'en' ? 'new' : 'naye'}</span>}</div>
+                {db.notifications.filter((n) => n.userId === me).length === 0
+                  ? <p className="small muted" style={{ margin: '2px 0 0' }}>{lang === 'en' ? 'No alerts yet' : 'Koi alert nahi'}</p>
+                  : db.notifications.filter((n) => n.userId === me).slice(0, 3).map((n) => (
+                    <div key={n.id} className="rail-note">{n.text}<div className="small muted">{new Date(n.at).toLocaleString()}</div></div>
+                  ))}
+                <button className="btn btn-ghost rail-btn" onClick={() => setTab('alerts')}>{t(lang, 'alerts')} →</button>
+              </div>
+              <div className="rail-card">
+                <div className="rail-head"><b>{lang === 'en' ? 'How it works' : 'Kaise kaam karta hai'}</b></div>
+                <div className="phase-line"><span className="n">1</span><div><b>🎙️ {lang === 'en' ? 'Speak' : 'Bolo'}</b><div className="small muted">{lang === 'en' ? 'Say the work — job goes live' : 'Kaam bolo — job live ho jati hai'}</div></div></div>
+                <div className="phase-line"><span className="n">2</span><div><b>💬 {lang === 'en' ? 'Bids come in' : 'Bids aati hain'}</b><div className="small muted">{lang === 'en' ? 'Karigars send their rates' : 'Karigar apne rate bhejte hain'}</div></div></div>
+                <div className="phase-line"><span className="n">3</span><div><b>📞 {lang === 'en' ? 'Number unlocks' : 'Number milta hai'}</b><div className="small muted">{lang === 'en' ? 'Karigar accepts your request — talk directly' : 'Karigar request accept kare — seedha baat karein'}</div></div></div>
+              </div>
+            </aside>
+          </div>
         )}
 
         {tab === 'post' && (
@@ -411,7 +457,10 @@ export default function SeekerPage() {
 
         {tab === 'jobs' && (
           <>
-            <h1 style={{ marginTop: 0 }}>📋 {t(lang, 'myPosted')}</h1>
+            <div className="page-head">
+              <h1 style={{ marginTop: 0 }}>📋 {t(lang, 'myPosted')}</h1>
+              <span className="head-count desktop-only">{myJobs.length} jobs • {db.bids.filter((b) => myJobs.some((j) => j.id === b.jobId) && b.status !== 'removed').length} bids</span>
+            </div>
             {hirePrompt}
             {myJobs.length === 0 && (
               <div className="card empty"><div className="ei">📋</div><p className="muted">Abhi koi job post nahi hui</p><button className="btn btn-primary" onClick={goPost}>🎙️ Pehli Job Post Karein</button></div>
@@ -553,7 +602,7 @@ export default function SeekerPage() {
               {list.length === 0 && (
                 <div className="card empty"><div className="ei">🧰</div><p className="muted">{t(lang, 'noProviderForCat')}</p><button className="btn btn-primary" onClick={goPost}>🎙️ {t(lang, 'postJob')}</button></div>
               )}
-              <div className="card-list">{list.map((u) => {
+              <div className="card-list autofit">{list.map((u) => {
                 const pr = db.providers[u.id];
                 const i = avIndex(u.id);
                 return (
@@ -647,7 +696,12 @@ export default function SeekerPage() {
 
       <ScreeningModal found={screen?.found} cleaned={screen?.cleaned} onContinue={() => createJob(screen.cleaned)} onClose={() => setScreen(null)} />
 
-      <BottomNav items={navItems} active={navActive} onGo={navGo} />
+      <BottomNav
+        items={navItems}
+        active={navActive}
+        onGo={navGo}
+        userBlock={{ name: session.name, roleLabel: lang === 'en' ? 'Seeker' : 'Seeker', photo: null, onOpen: () => { setTab('settings'); window.scrollTo({ top: 0 }); } }}
+      />
     </div>
   );
 }

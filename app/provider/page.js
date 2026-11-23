@@ -265,6 +265,19 @@ export default function ProviderPage() {
     { key: 'karigar', icon: '🧰', label: t(lang, 'navKarigar') },
   ];
   const navActive = { home: 'home', alerts: 'home', jobs: 'jobs', bid: 'jobs', success: 'jobs', wallet: 'wallet', profile: 'karigar', edit: 'karigar', settings: 'karigar', selfie: 'karigar' }[tab] || 'jobs';
+  // Desktop topbar section title (hidden on mobile) from the same tab state.
+  const pageTitle = { home: t(lang, 'navHome'), jobs: t(lang, 'jobsTitle'), bid: t(lang, 'bidTitle'), wallet: t(lang, 'walletTitle'), profile: t(lang, 'myProfile'), edit: t(lang, 'myProfile'), settings: t(lang, 'settings'), alerts: t(lang, 'alerts'), selfie: 'Selfie', success: '' }[tab] || '';
+  // Desktop only (.desktop-only): dashboard stats strip, computed from the
+  // same store data already on this page — display only, no new logic.
+  const activeBids = myBids.filter((b) => b.status === 'active').length;
+  const statsStrip = (
+    <div className="stat-strip desktop-only">
+      <div className="stat-card"><span className="stat-ic">🪙</span><div><b>{wallet.balance} {t(lang, 'coins')}</b><small>= PKR {(wallet.balance * COIN_PKR).toLocaleString()}</small></div></div>
+      <div className={`stat-card ${pendingRequests.length ? 'hot' : ''}`}><span className="stat-ic">📞</span><div><b>{pendingRequests.length}</b><small>{t(lang, 'reqTitle').replace(/^[^\p{L}]+/u, '')}</small></div></div>
+      <div className="stat-card"><span className="stat-ic">💬</span><div><b>{activeBids}</b><small>{lang === 'en' ? 'My active bids' : 'Meri active bids'}</small></div></div>
+      <div className="stat-card"><span className="stat-ic">⭐</span><div><b>{profile.ratingAvg ? `${profile.ratingAvg} ★` : 'New'}</b><small>{profile.ratingCount || 0} ratings • {stars(profile.ratingAvg)}</small></div></div>
+    </div>
+  );
   const navGo = (key) => {
     if (key === 'home') setTab('home');
     else if (key === 'jobs') setTab('jobs');
@@ -278,12 +291,13 @@ export default function ProviderPage() {
 
   return (
     <div dir={lang === 'ur' ? 'rtl' : 'ltr'} className="app-shell">
-      <AppHeader role="provider" />
+      <AppHeader role="provider" title={pageTitle} />
       {toast && <div className="toast-wrap" aria-live="polite"><div className="toast">{toast}</div></div>}
       <main className="page">
 
         {tab === 'home' && (
           <>
+            {statsStrip}
             <div className="card">
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 <ProviderAvatar photo={profile.photo} name={session.name} />
@@ -323,6 +337,7 @@ export default function ProviderPage() {
 
         {tab === 'jobs' && (
           <>
+            {statsStrip}
             {pendingRequests.length > 0 && (
               <div style={{ marginBottom: 16 }}>
                 <div className="section-head" style={{ marginTop: 0 }}>
@@ -366,7 +381,7 @@ export default function ProviderPage() {
             {feed.length === 0 && (
               <div className="card empty"><div className="ei">📭</div><p className="muted">Abhi koi job nahi</p></div>
             )}
-            <div className="card-list">{feed.map((j) => {
+            <div className="card-list autofit">{feed.map((j) => {
               const m = jobMeta(j); const cat = catOf(j);
               const rec = revealFor(j);
               const seeker = db.users.find((u) => u.id === j.seekerId);
@@ -504,6 +519,7 @@ export default function ProviderPage() {
             <div className="wallet-side">
             <h2 style={{ margin: '20px 0 8px' }}>{t(lang, 'history')}</h2>
             <div className="card" style={{ padding: '6px 16px' }}>
+              <div className="txn-head desktop-only"><span>Detail</span><span>Amount</span></div>
               {db.topups.filter((x) => x.providerId === me).map((x) => (
                 <div key={x.id} className="txn">
                   <span>🪙 Top-up — {x.method}<br /><span className="small muted">{x.ref} • {new Date(x.at).toLocaleDateString()}</span></span>
@@ -661,7 +677,13 @@ export default function ProviderPage() {
 
       <ScreeningModal found={screen?.found} cleaned={screen?.cleaned} onContinue={() => doSendBid(screen.cleaned)} onClose={() => setScreen(null)} />
 
-      <BottomNav items={navItems} active={navActive} onGo={navGo} />
+      <BottomNav
+        items={navItems}
+        active={navActive}
+        onGo={navGo}
+        coinWidget={{ balance: wallet.balance, pkr: wallet.balance * COIN_PKR, onTopup: () => { setTab('wallet'); window.scrollTo({ top: 0 }); } }}
+        userBlock={{ name: session.name, roleLabel: lang === 'en' ? 'Karigar' : 'Karigar', photo: profile.photo, onOpen: () => { setTab('settings'); window.scrollTo({ top: 0 }); } }}
+      />
     </div>
   );
 }
