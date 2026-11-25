@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useServio, transact, setSession, getSession, resetDemoData, uid, logActivity } from '../../lib/store';
-import { TINTS } from '../../lib/seed';
+import { TINTS, pruneSpecs } from '../../lib/seed';
 import { t, p, setLang } from '../../lib/i18n';
 import { useLang } from '../../components/AppHeader';
 import BottomNav from '../../components/BottomNav';
@@ -70,7 +70,7 @@ export default function LoginPage() {
   const [pinError, setPinError] = useState(false);
   const [toast, setToast] = useState('');
   // Provider voice onboarding state (prototype `profile` + `ob`)
-  const [obProfile, setObProfile] = useState({ name: '', work: [], areas: [], exp: '', charges: '', avail: true });
+  const [obProfile, setObProfile] = useState({ name: '', work: [], specs: {}, areas: [], exp: '', charges: '', avail: true, bio: '' });
   const [obStep, setObStep] = useState(0);
   const [obReturnTo, setObReturnTo] = useState(null);
   const [photos, setPhotos] = useState(0);
@@ -131,8 +131,8 @@ export default function LoginPage() {
         { toast: `New seeker: ${user.name}`, toastFor: adminIds });
       goHome(user); return;
     }
-    // Provider: 6-step voice onboarding, then the selfie gate, then profile card.
-    setObProfile({ name: name.trim(), work: [], areas: [], exp: '', charges: '', avail: true });
+    // Provider: 7-step voice onboarding, then the selfie gate, then profile card.
+    setObProfile({ name: name.trim(), work: [], specs: {}, areas: [], exp: '', charges: '', avail: true, bio: '' });
     setObStep(0); setObReturnTo(null); setPhotos(0); setSelfie(null); setSelfieReturn(null);
     setStep('onboard');
     window.scrollTo({ top: 0 });
@@ -154,9 +154,11 @@ export default function LoginPage() {
     transact((d) => {
       d.users.push(user);
       d.providers[user.id] = {
-        categories: obProfile.work.slice(0, 3), areas: obProfile.areas,
+        categories: obProfile.work.slice(0, 3),
+        specialities: pruneSpecs(obProfile.work, obProfile.specs),
+        areas: obProfile.areas,
         experience: expToYears(obProfile.exp), price: chargesToPrice(obProfile.charges),
-        availability: obProfile.avail, ratingAvg: 0, ratingCount: 0, bio: '',
+        availability: obProfile.avail, ratingAvg: 0, ratingCount: 0, bio: (obProfile.bio || '').trim(),
         photo: selfie, // face-cropped selfie from the verification step
       };
       d.wallets[user.id] = { balance: 40, txns: [{ id: uid(), type: 'starter', amount: 40, note: 'Starter coins', at: Date.now() }] };
@@ -170,7 +172,7 @@ export default function LoginPage() {
   const obPatch = (patch) => setObProfile((pr) => ({ ...pr, ...patch }));
   const obNext = () => {
     if (obReturnTo === 'profile') { setObReturnTo(null); setStep('profile'); return; }
-    if (obStep < 5) setObStep(obStep + 1);
+    if (obStep < OBQ.length - 1) setObStep(obStep + 1);
     else { setStep('selfie'); setToast('📷 Ab selfie — chehra verify karein'); }
     window.scrollTo({ top: 0 });
   };
@@ -194,7 +196,7 @@ export default function LoginPage() {
   };
   const selfieBack = () => {
     if (selfieReturn === 'profile') { setSelfieReturn(null); setStep('profile'); }
-    else { setObStep(5); setStep('onboard'); }
+    else { setObStep(OBQ.length - 1); setStep('onboard'); }
     window.scrollTo({ top: 0 });
   };
 
@@ -395,7 +397,7 @@ export default function LoginPage() {
 
         {step === 'profile' && (
           <div className="profile-col">
-            <button className="backlink" onClick={() => { setObStep(5); setObReturnTo(null); setStep('onboard'); }}>← {p(lang, 'back')}</button>
+            <button className="backlink" onClick={() => { setObStep(OBQ.length - 1); setObReturnTo(null); setStep('onboard'); }}>← {p(lang, 'back')}</button>
             <h1>{t(lang, 'myProfile')}</h1>
             <ProfileCard
               profile={obProfile}
@@ -403,6 +405,7 @@ export default function LoginPage() {
               categories={db.categories}
               onRerecord={rerecord}
               onAvail={(v) => obPatch({ avail: v })}
+              onBio={(v) => obPatch({ bio: v })}
               photos={photos}
               onPhotos={setPhotos}
               photo={selfie}

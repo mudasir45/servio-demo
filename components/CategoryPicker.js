@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { TINTS, GROUPS, groupLabel, searchCategories } from '../lib/seed';
+import { TINTS, GROUPS, groupLabel, searchCategories, subLabel } from '../lib/seed';
 import { t } from '../lib/i18n';
 
 // One reusable service picker: search (typed or simulated voice) + popular
@@ -23,7 +23,7 @@ export default function CategoryPicker({ categories, lang, onPick, counts, selec
   );
   const idxOf = (c) => (categories || []).findIndex((x) => x.id === c.id);
 
-  const tile = (c) => (
+  const tile = (c, matchedSub) => (
     <button
       key={c.id}
       className={`cat ${selectedId === c.id ? 'sel' : ''}`}
@@ -31,6 +31,7 @@ export default function CategoryPicker({ categories, lang, onPick, counts, selec
       onClick={() => onPick(c)}
     >
       <span className="ic">{c.icon}</span><b>{catLabel(c, lang)}</b>
+      {matchedSub && <span className="cat-sub">{subLabel(matchedSub, lang)}</span>}
       {counts && <span className="cat-count">{counts[c.id] || 0} karigar</span>}
     </button>
   );
@@ -74,7 +75,7 @@ export default function CategoryPicker({ categories, lang, onPick, counts, selec
             {onEmptyAction && <button className="btn btn-primary" onClick={onEmptyAction}>🎙️ {t(lang, 'postJob')}</button>}
           </div>
         ) : (
-          <div className="cat-grid">{results.map((r) => tile(r.cat))}</div>
+          <div className="cat-grid">{results.map((r) => tile(r.cat, r.matchedSub))}</div>
         )
       ) : (
         <>

@@ -7,7 +7,7 @@ import { ObStep, ProfileCard, OBQ, expToYears, yearsToExp, chargesToPrice, price
 import { Dots, ListenBtn, Celebrate, ScreeningModal, priceText, priceTypeLabel, stars, ProviderAvatar } from '../../components/ui';
 import SelfieStep from '../../components/SelfieStep';
 import { useServio, transact, uid, notify, notifyAdmins, logActivity, findPhone, stripPhone, userName, catName, setSession, clearSession, acceptRevealRequest, declineRevealRequest, exchangeNumbers } from '../../lib/store';
-import { COIN_PKR } from '../../lib/seed';
+import { COIN_PKR, pruneSpecs } from '../../lib/seed';
 import { t, p } from '../../lib/i18n';
 
 // Display-only derivations (the store has no distance/budget fields; the
@@ -228,9 +228,13 @@ export default function ProviderPage() {
 
   /* ---------- profile (store profile <-> onboarding shape) */
   const obProfile = {
-    name: session.name, work: profile.categories || [], areas: profile.areas || [],
+    name: session.name, work: profile.categories || [], specs: profile.specialities || {}, areas: profile.areas || [],
     exp: yearsToExp(profile.experience), charges: priceToCharges(profile.price), avail: !!profile.availability,
+    bio: profile.bio || '',
   };
+  // Bio ("Khaas Kaam") on the profile card saves straight to the store,
+  // same immediate-persistence pattern as the availability switch.
+  const saveBio = (v) => transact((d) => { if (d.providers[me]) d.providers[me].bio = v; });
   const startRerecord = (key) => {
     const i = OBQ.findIndex((q) => q.key === key);
     if (i < 0) return;
@@ -246,6 +250,8 @@ export default function ProviderPage() {
     transact((d) => {
       const pr = d.providers[me];
       pr.categories = (editProfile.work || []).slice(0, 3); pr.areas = editProfile.areas;
+      pr.specialities = pruneSpecs(editProfile.work, editProfile.specs);
+      pr.bio = (editProfile.bio || '').trim();
       pr.experience = expToYears(editProfile.exp); pr.price = chargesToPrice(editProfile.charges);
       pr.availability = editProfile.avail;
       const u = d.users.find((x) => x.id === me);
@@ -392,6 +398,9 @@ export default function ProviderPage() {
                     <h3>{cat.icon} {jobTitle(j)}</h3>
                     {isUrgent(j) && <span className="tag">🔴 Urgent</span>}
                   </div>
+                  {j.subId && ((profile.specialities || {})[j.categoryId] || []).includes(j.subId) && (
+                    <div style={{ marginBottom: 8 }}><span className="tag gold">⭐ Aapki khaas service</span></div>
+                  )}
                   <div className="meta"><span>📍 {j.area} • {m.dist}</span><span>🕐 {m.when}</span><span>💰 {m.budget}</span></div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                     <ListenBtn id={'job' + j.id} playingId={playingId} onPlay={playVoice} />
@@ -549,6 +558,7 @@ export default function ProviderPage() {
               categories={db.categories}
               onRerecord={startRerecord}
               onAvail={toggleAvailability}
+              onBio={saveBio}
               photos={photos}
               onPhotos={(n) => { setPhotos(n); if (n > photos) setToast(`📷 Photo lag gayi (${n} / 10)`); }}
               photo={profile.photo}

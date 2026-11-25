@@ -283,6 +283,7 @@ th{background:#F1E8D2;color:var(--ink);font-weight:800}
 .search-bar input:focus{outline:none}
 .search-mic{width:46px;height:46px;flex:0 0 46px;border-radius:50%;border:0;background:var(--marigold);font-size:20px;display:grid;place-items:center}
 .cat-count{display:block;margin-top:3px;font-size:12px;font-weight:800;color:var(--marigold-d)}
+.cat-sub{display:block;margin-top:3px;font-size:12px;font-weight:700;color:var(--leaf)}
 .cat-group-title{font-family:var(--serif);font-size:18px;margin:20px 0 10px}
 .voice-note-line{font-size:14px;font-weight:700;color:var(--marigold-d);margin:2px 2px 8px}
 

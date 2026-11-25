@@ -7,6 +7,7 @@ import { ListenBtn, Celebrate, ScreeningModal, priceText, priceTypeLabel, stars,
 import { PHOTO_ICONS } from '../../components/Onboarding';
 import { useServio, transact, uid, notify, notifyAdmins, logActivity, findPhone, stripPhone, requestReveal, providersForCategory, userName, catName, clearSession } from '../../lib/store';
 import CategoryPicker from '../../components/CategoryPicker';
+import { subLabel, findSub } from '../../lib/seed';
 import { t, p } from '../../lib/i18n';
 
 // The prototype's three voice samples, verbatim (category names mapped to store ids).
@@ -45,8 +46,10 @@ export default function SeekerPage() {
   // Bids / reveal
   const [bidsJobId, setBidsJobId] = useState(null);
   // Karigar tab is service-first: null = pick a service, otherwise the
-  // chosen category id whose providers are listed.
+  // chosen category id whose providers are listed. karigarSub narrows that
+  // list to one speciality of the chosen category (null = Saare).
   const [karigarCat, setKarigarCat] = useState(null);
+  const [karigarSub, setKarigarSub] = useState(null);
   const [providerId, setProviderId] = useState(null);
   const [playingId, setPlayingId] = useState(null);
   const playTimer = useRef(null);
@@ -98,7 +101,7 @@ export default function SeekerPage() {
     aiTimer.current = setTimeout(() => {
       setAiLoading(false);
       if (!s.loc) { setPendingSample(s); setFuAnswer(''); setTab('followup'); window.scrollTo({ top: 0 }); }
-      else setExtracted({ categoryId: tappedCat || s.catId, area: s.loc, when: s.when, budget: s.budget, desc: s.desc });
+      else setExtracted({ categoryId: tappedCat || s.catId, subId: null, area: s.loc, when: s.when, budget: s.budget, desc: s.desc });
     }, 1200);
   };
   const toggleVoice = () => {
@@ -129,14 +132,14 @@ export default function SeekerPage() {
     setPendingSample(null);
     setTimeout(() => {
       setTab('post');
-      setExtracted({ categoryId: tappedCat || s.catId, area: s.loc, when: s.when, budget: s.budget, desc: s.desc });
+      setExtracted({ categoryId: tappedCat || s.catId, subId: null, area: s.loc, when: s.when, budget: s.budget, desc: s.desc });
       setToast('✅ Job tayyar hai');
     }, 600);
   };
   const createJob = (desc) => {
     const ex = extracted; if (!ex) return;
     const job = {
-      id: 'job-' + uid(), seekerId: me, categoryId: ex.categoryId, description: (desc || ex.desc).trim(),
+      id: 'job-' + uid(), seekerId: me, categoryId: ex.categoryId, subId: ex.subId || null, description: (desc || ex.desc).trim(),
       area: ex.area, urgency: WHEN_TO_URGENCY[ex.when] || 'Today', status: 'open', revealCount: 0, at: Date.now(),
     };
     const targets = db.users.filter((u) => u.role === 'provider' && db.providers[u.id] && db.providers[u.id].categories.includes(ex.categoryId)).map((u) => u.id);
@@ -405,9 +408,24 @@ export default function SeekerPage() {
               <div className="card" style={{ marginTop: 16 }}>
                 <h2>✅ {p(lang, 'aiGot')}</h2>
                 <label>{p(lang, 'fCatL')}</label>
-                <select value={extracted.categoryId} onChange={(e) => setExtracted({ ...extracted, categoryId: e.target.value })}>
+                <select value={extracted.categoryId} onChange={(e) => setExtracted({ ...extracted, categoryId: e.target.value, subId: null })}>
                   {db.categories.filter((c) => c.active).map((c) => (<option key={c.id} value={c.id}>{lang === 'ur' ? c.ur : lang === 'ro' ? c.ro : c.en}</option>))}
                 </select>
+                {(() => {
+                  const cat = db.categories.find((c) => c.id === extracted.categoryId);
+                  const subs = (cat && cat.subs) || [];
+                  if (!subs.length) return null;
+                  return (
+                    <>
+                      <label>{lang === 'en' ? 'What kind of work? (optional)' : 'Kis qisam ka kaam? (optional)'}</label>
+                      <div className="pill-row">
+                        {subs.map((s) => (
+                          <button key={s.id} className={`pill ${extracted.subId === s.id ? 'active' : ''}`} onClick={() => setExtracted({ ...extracted, subId: extracted.subId === s.id ? null : s.id })}>{subLabel(s, lang)}</button>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
                 <label>{p(lang, 'fLocL')}</label>
                 <input value={extracted.area} onChange={(e) => setExtracted({ ...extracted, area: e.target.value })} />
                 <label>{p(lang, 'fWhenL')}</label>
@@ -586,22 +604,47 @@ export default function SeekerPage() {
               categories={db.categories}
               lang={lang}
               counts={karigarCounts}
-              onPick={(c) => { setKarigarCat(c.id); window.scrollTo({ top: 0 }); }}
+              onPick={(c) => { setKarigarCat(c.id); setKarigarSub(null); window.scrollTo({ top: 0 }); }}
               onEmptyAction={goPost}
             />
           </>
         )}
 
         {tab === 'karigar' && karigarCat && (() => {
-          const list = providersForCategory(db, karigarCat);
+          const base = providersForCategory(db, karigarCat);
           const cat = catOf(karigarCat);
+          const catFull = db.categories.find((c) => c.id === karigarCat) || {};
+          const catSubs = catFull.subs || [];
+          const hasSpecs = (u) => (((db.providers[u.id] || {}).specialities || {})[karigarCat] || []).length > 0;
+          // No filter: available first (providersForCategory order), then
+          // providers who listed specialities for this service above those
+          // who did not, then rating. With a filter: only matching providers.
+          const list = karigarSub
+            ? base.filter((u) => (((db.providers[u.id] || {}).specialities || {})[karigarCat] || []).includes(karigarSub))
+            : [...base].sort((a, b) => {
+              const pa = db.providers[a.id]; const pb = db.providers[b.id];
+              if (!!pb.availability !== !!pa.availability) return pa.availability ? -1 : 1;
+              if (hasSpecs(b) !== hasSpecs(a)) return hasSpecs(b) ? 1 : -1;
+              if ((pb.ratingAvg || 0) !== (pa.ratingAvg || 0)) return (pb.ratingAvg || 0) - (pa.ratingAvg || 0);
+              return (pb.ratingCount || 0) - (pa.ratingCount || 0);
+            });
           return (
             <>
-              <button className="backlink" onClick={() => setKarigarCat(null)}>← {t(lang, 'back')}</button>
+              <button className="backlink" onClick={() => { setKarigarCat(null); setKarigarSub(null); }}>← {t(lang, 'back')}</button>
               <h1>{cat.icon} {catName(db, karigarCat, lang)}</h1>
-              {list.length === 0 && (
-                <div className="card empty"><div className="ei">🧰</div><p className="muted">{t(lang, 'noProviderForCat')}</p><button className="btn btn-primary" onClick={goPost}>🎙️ {t(lang, 'postJob')}</button></div>
+              {catSubs.length > 0 && (
+                <div className="pill-row" style={{ marginBottom: 14 }}>
+                  <button className={`pill ${!karigarSub ? 'active' : ''}`} onClick={() => setKarigarSub(null)}>{t(lang, 'all')}</button>
+                  {catSubs.map((s) => (
+                    <button key={s.id} className={`pill ${karigarSub === s.id ? 'active' : ''}`} onClick={() => setKarigarSub(karigarSub === s.id ? null : s.id)}>{subLabel(s, lang)}</button>
+                  ))}
+                </div>
               )}
+              {list.length === 0 && (karigarSub ? (
+                <div className="card empty"><div className="ei">⭐</div><p className="muted">{lang === 'en' ? 'No karigar picked this speciality yet' : 'Is khaas service ka karigar abhi nahi'}</p><button className="btn btn-primary" onClick={() => setKarigarSub(null)}>{t(lang, 'all')} →</button></div>
+              ) : (
+                <div className="card empty"><div className="ei">🧰</div><p className="muted">{t(lang, 'noProviderForCat')}</p><button className="btn btn-primary" onClick={goPost}>🎙️ {t(lang, 'postJob')}</button></div>
+              ))}
               <div className="card-list autofit">{list.map((u) => {
                 const pr = db.providers[u.id];
                 const i = avIndex(u.id);
@@ -642,6 +685,22 @@ export default function SeekerPage() {
                     </div>
                   </div>
                   <div className="brass-rule"></div>
+                  {(pr.categories || []).map((cid) => {
+                    const subs = ((pr.specialities || {})[cid] || []);
+                    if (!subs.length) return null;
+                    const cObj = db.categories.find((c) => c.id === cid);
+                    return (
+                      <div key={cid} style={{ marginTop: 12 }}>
+                        <div className="small" style={{ fontWeight: 800 }}>{(cObj || {}).icon || '🧰'} {catName(db, cid, lang)}</div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                          {subs.map((sid) => { const s = findSub(cObj, sid); return s ? <span key={sid} className="chip">{subLabel(s, lang)}</span> : null; })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {pr.bio ? (
+                    <div className="field-row"><span className="fi">✍️</span><div className="fv"><small>{lang === 'en' ? 'Special work' : 'Khaas Kaam'}</small><b>{pr.bio}</b></div></div>
+                  ) : null}
                   <div className="field-row"><span className="fi">💰</span><div className="fv"><small>Rate</small><b>PKR {(pr.price || 0).toLocaleString()} se</b></div></div>
                   <div className="field-row"><span className="fi">🪙</span><div className="fv"><small>Wallet (demo)</small><b>{db.wallets[detailProvider.id] ? db.wallets[detailProvider.id].balance : 0} coins</b></div></div>
                   <h2 style={{ margin: '14px 0 4px' }}>{t(lang, 'photos')}</h2>

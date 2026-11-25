@@ -1,19 +1,33 @@
 'use client';
 import { useState } from 'react';
-import { TINTS, toggleService } from '../lib/seed';
+import { TINTS, toggleService, toggleSub, subLabel } from '../lib/seed';
 import { t, p } from '../lib/i18n';
 
-// The prototype's 6-step voice onboarding (OBQ), copied verbatim — questions,
-// icons, step types and simulated mic answers. `work` holds store category ids;
-// the prototype's sample for step 2 is the category whose English name is "Plumber".
+// The prototype's voice onboarding (OBQ) — questions, icons, step types and
+// simulated mic answers. `work` holds store category ids; the prototype's
+// sample for step 2 is the category whose English name is "Plumber".
+// Step 3 (`specs`) is the specialities step: right after the work step, the
+// provider picks his khaas services inside each chosen category (chips from
+// the category's `subs`, max 5 per category, skippable).
 export const OBQ = [
   { key: 'name', icon: '👤', q: { ur: 'آپ کا نام؟', roman: 'Aap ka naam?', en: 'Your name?' }, type: 'text', sample: 'Muhammad Ahmad', ph: 'Naam likhein…' },
   { key: 'work', icon: '🧰', q: { ur: 'آپ کا کام؟', roman: 'Aap ka kaam?', en: 'Your work?' }, type: 'cats', sample: 'Plumber' },
+  { key: 'specs', icon: '⭐', q: { ur: 'خاص سروسز؟', roman: 'Khaas services?', en: 'Your specialities?' }, type: 'specs' },
   { key: 'areas', icon: '📍', q: { ur: 'کہاں کام کرتے ہیں؟', roman: 'Kahan kaam karte hain?', en: 'Where do you work?' }, type: 'areas', sample: 'Depalpur' },
   { key: 'exp', icon: '⭐', q: { ur: 'کتنا تجربہ؟', roman: 'Kitna tajurba?', en: 'Experience?' }, type: 'chips', options: ['1 saal se kam', '1–3 saal', '3–5 saal', '5+ saal'], sample: '5+ saal' },
   { key: 'charges', icon: '💰', q: { ur: 'وزٹ چارجز؟', roman: 'Visit charges?', en: 'Visit charges?' }, type: 'chips', options: ['Free visit', 'PKR 200', 'PKR 300', 'PKR 500'], sample: 'PKR 300' },
   { key: 'avail', icon: '🟢', q: { ur: 'ابھی دستیاب ہیں؟', roman: 'Abhi available hain?', en: 'Available now?' }, type: 'avail', sample: 'Haan, available' },
 ];
+
+// A provider can pick at most 5 specialities inside one category.
+export const MAX_SUBS = 5;
+export const MAX_SUBS_MSG = {
+  ur: 'زیادہ سے زیادہ 5 خاص سروسز',
+  ro: 'Zyada se zyada 5 khaas services',
+  en: 'At most 5 specialities per service',
+};
+// Simulated mic line for the profile card's "Khaas Kaam" (bio) row.
+export const SAMPLE_BIO = 'Main saaf suthra kaam karta hoon, waqt par aata hoon aur kaam ki guarantee deta hoon.';
 
 // The store keeps experience as years and visit charge as a PKR number; the
 // onboarding speaks in the prototype's chip labels. These map between them.
@@ -41,6 +55,11 @@ const catLabel = (c, lang) => (lang === 'ur' ? c.ur : lang === 'en' ? c.en : c.r
 export function obAnswerText(profile, key, lang, categories) {
   if (key === 'name') return profile.name || '';
   if (key === 'work') return (profile.work || []).map((id) => { const c = (categories || []).find((x) => x.id === id); return c ? catLabel(c, lang) : id; }).join(' • ');
+  if (key === 'specs') {
+    const total = (profile.work || []).reduce((n, cid) => n + (((profile.specs || {})[cid] || []).length), 0);
+    if (!total) return '';
+    return lang === 'en' ? `${total} specialities` : lang === 'ur' ? `${total} خاص سروسز` : `${total} khaas services`;
+  }
   if (key === 'areas') return (profile.areas || []).join(' • ');
   if (key === 'exp') return profile.exp || '';
   if (key === 'charges') return profile.charges || '';
@@ -49,7 +68,7 @@ export function obAnswerText(profile, key, lang, categories) {
 }
 
 // One onboarding step screen, exactly the prototype's layout:
-// backlink, progress dots + "n / 6", big emoji, serif question, body,
+// backlink, progress dots + "n / 7", big emoji, serif question, body,
 // big brass mic (press-and-hold) with caption, white answer box,
 // midnight "Aage →" sticky button, "Skip ⏭" link.
 // A provider can offer at most 3 services (work categories) — enforced here in
@@ -100,12 +119,21 @@ export function ObStep({ step, profile, onChange, lang, categories, areas, onBac
     onChange({ [key]: has ? profile[key].filter((x) => x !== val) : [...profile[key], val] });
   };
 
+  // Specialities: max 5 per category, via the shared toggleSub helper.
+  const toggleSpec = (catId, subId) => {
+    const specs = profile.specs || {};
+    const r = toggleSub(specs[catId], subId, MAX_SUBS);
+    if (r.limited) { setLimitMsg(MAX_SUBS_MSG[lang] || MAX_SUBS_MSG.ro); return; }
+    setLimitMsg('');
+    onChange({ specs: { ...specs, [catId]: r.selected } });
+  };
+
   return (
     <>
       <button className="backlink" onClick={onBack}>← {p(lang, 'back')}</button>
       <div className="progress-dots">
         {OBQ.map((_, i) => (<i key={i} className={i < step ? 'done' : i === step ? 'on' : ''}></i>))}
-        <span>{step + 1} / 6</span>
+        <span>{step + 1} / {OBQ.length}</span>
       </div>
       <div className="ob-icon">{q.icon}</div>
       <h1 className="ob-q">{question}</h1>
@@ -125,6 +153,30 @@ export function ObStep({ step, profile, onChange, lang, categories, areas, onBac
             </div>
             {limitMsg && <div className="warn" role="alert">{limitMsg}</div>}
           </>
+        )}
+        {q.type === 'specs' && (
+          <div>
+            {(profile.work || []).length === 0 && (
+              <p className="muted" style={{ textAlign: 'center' }}>{lang === 'en' ? 'First pick your work — then khaas services' : 'Pehle kaam chunein — phir khaas services'}</p>
+            )}
+            {(profile.work || []).map((cid) => {
+              const c = (categories || []).find((x) => x.id === cid);
+              if (!c) return null;
+              const sel = (profile.specs || {})[cid] || [];
+              return (
+                <div key={cid} style={{ marginBottom: 16 }}>
+                  <p className="hold-hint" style={{ margin: '0 0 8px', textAlign: 'left' }}>{c.icon} <b>{catLabel(c, lang)}</b> — {sel.length} / {MAX_SUBS}</p>
+                  <div className="pill-row">
+                    {(c.subs || []).map((s) => (
+                      <button key={s.id} className={`pill ${sel.includes(s.id) ? 'active' : ''}`} onClick={() => toggleSpec(cid, s.id)}>{subLabel(s, lang)}</button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {limitMsg && <div className="warn" role="alert">{limitMsg}</div>}
+            <p className="hold-hint">{lang === 'en' ? 'Optional — Skip bhi kar sakte hain' : 'Ye optional hai — Skip bhi kar sakte hain'}</p>
+          </div>
         )}
         {q.type === 'areas' && (
           <div className="pill-row" style={{ justifyContent: 'center' }}>
@@ -148,7 +200,7 @@ export function ObStep({ step, profile, onChange, lang, categories, areas, onBac
           </div>
         )}
       </div>
-      {q.type !== 'avail' && (
+      {q.type !== 'avail' && q.type !== 'specs' && (
         <div>
           <button
             className={`bigmic ${holding ? 'listening' : ''}`}
@@ -165,7 +217,7 @@ export function ObStep({ step, profile, onChange, lang, categories, areas, onBac
       <div className={`ob-answer ${answer ? '' : 'empty'}`}>{answer || '—'}</div>
       <div className="sticky-action">
         <button className="btn btn-primary" onClick={onNext}>
-          {returnTo ? t(lang, 'profileDone') : step === 5 ? `${t(lang, 'seeProfile')} →` : `${t(lang, 'next')} →`}
+          {returnTo ? t(lang, 'profileDone') : step === OBQ.length - 1 ? `${t(lang, 'seeProfile')} →` : `${t(lang, 'next')} →`}
         </button>
       </div>
       {!returnTo && <button className="skip-link" onClick={onSkip}>{t(lang, 'skip')} ⏭</button>}
@@ -176,8 +228,11 @@ export function ObStep({ step, profile, onChange, lang, categories, areas, onBac
 export const PHOTO_ICONS = ['🔧', '🪛', '🚿', '💡', '❄️', '🪚', '🎨', '📱'];
 
 // The prototype's AI profile card: field rows with a round brass mic button
-// per row (re-record), the Available switch row, and the work-photos card.
-export function ProfileCard({ profile, lang, categories, onRerecord, onAvail, photos, onPhotos, photo, onRetake }) {
+// per row (re-record), the Available switch row, the Khaas Services card
+// (specialities grouped by category, edit reopens the specs step), the
+// Khaas Kaam card (bio — mic sample or typed, saved to providers[id].bio),
+// and the work-photos card.
+export function ProfileCard({ profile, lang, categories, onRerecord, onAvail, photos, onPhotos, photo, onRetake, onBio }) {
   const workTxt = (profile.work || []).map((id) => { const c = (categories || []).find((x) => x.id === id); return c ? c.icon + ' ' + catLabel(c, lang) : id; }).join(' • ');
   const row = (icon, label, value, key) => (
     <div className="field-row" key={key}>
@@ -212,6 +267,47 @@ export function ProfileCard({ profile, lang, categories, onRerecord, onAvail, ph
           <label className="switch"><input type="checkbox" checked={!!profile.avail} onChange={(e) => onAvail(e.target.checked)} /><span className="track"></span></label>
         </div>
       </div>
+      {(profile.work || []).length > 0 && (
+        <div className="card" style={{ marginTop: 12 }}>
+          <div className="field-row">
+            <span className="fi">⭐</span>
+            <div className="fv"><small>{lang === 'en' ? 'Specialities' : 'Khaas Services'}</small><b>{lang === 'en' ? 'What I do best' : 'Jo kaam sab se acha karta hoon'}</b></div>
+            {onRerecord && <button className="mic-mini" onClick={() => onRerecord('specs')} aria-label="Khaas services badlein">🎙️</button>}
+          </div>
+          {(profile.work || []).map((cid) => {
+            const c = (categories || []).find((x) => x.id === cid);
+            if (!c) return null;
+            const sel = (profile.specs || {})[cid] || [];
+            return (
+              <div key={cid} style={{ marginTop: 10 }}>
+                <div className="small" style={{ fontWeight: 800 }}>{c.icon} {catLabel(c, lang)}</div>
+                {sel.length ? (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                    {sel.map((sid) => { const s = (c.subs || []).find((x) => x.id === sid); return s ? <span key={sid} className="chip">{subLabel(s, lang)}</span> : null; })}
+                  </div>
+                ) : <p className="small muted" style={{ margin: '4px 0 0' }}>— {lang === 'en' ? 'none picked' : 'koi nahi chuni'}</p>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {onBio && (
+        <div className="card" style={{ marginTop: 12 }}>
+          <div className="field-row">
+            <span className="fi">✍️</span>
+            <div className="fv"><small>{lang === 'en' ? 'Special work' : 'Khaas Kaam'}</small><b>{lang === 'en' ? 'One line about your best work' : 'Apne khaas kaam ki ek line'}</b></div>
+            <button className="mic-mini" onClick={() => onBio(SAMPLE_BIO)} aria-label="Bol kar khaas kaam">🎙️</button>
+          </div>
+          <textarea
+            rows={2}
+            style={{ marginTop: 10 }}
+            placeholder={lang === 'en' ? 'Write, or tap the mic…' : 'Likhein, ya mic dabayein…'}
+            value={profile.bio || ''}
+            onChange={(e) => onBio(e.target.value)}
+            aria-label="Khaas Kaam"
+          />
+        </div>
+      )}
       <div className="card" style={{ marginTop: 12 }}>
         <h2>{t(lang, 'photos')} <span className="muted small">{photos} / 10</span></h2>
         <div className="photo-grid">
